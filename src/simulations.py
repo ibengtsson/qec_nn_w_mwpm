@@ -1,7 +1,7 @@
 import stim
 import numpy as np
 
-from qec_nn_w_mwpm.src.graph import get_3D_graph
+from src.graph import get_3D_graph
 
 
 class QECCodeSim:
