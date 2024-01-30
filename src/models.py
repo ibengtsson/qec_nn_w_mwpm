@@ -22,22 +22,6 @@ class EdgeNet(nn.Module):
         return y
 
 
-def main():
-    
-    model = EdgeNet()
-    input = torch.ones((100, 20))
-    label = torch.ones((100, 100))
-    loss_fun = nn.MSELoss()
-    
-    out = model(input)
-    loss = loss_fun(out, label)
-    loss.backward()
-    
-    print(loss)
-    
-if __name__ == "__main__":
-    main()
-    
     
         
         
