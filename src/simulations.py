@@ -22,6 +22,9 @@ class QECCodeSim:
         )
 
         self.compiled_sampler = self.circuit.compile_detector_sampler(seed=seed)
+        
+    def get_circuit(self):
+        return self.circuit
 
     def get_detector_coords(self):
         # create detection grid for circuit
