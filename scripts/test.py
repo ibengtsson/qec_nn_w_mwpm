@@ -32,6 +32,7 @@ class MWPM:
     def decode(self, syndrome):
         return self.decoder.decode(syndrome)
 
+    # should replace edge weights to their initial value
     def reset(self):
         pass
 
@@ -113,6 +114,36 @@ class MWPMLoss(torch.autograd.Function):
         gradients /= prediction.shape[0]
         return None, None, gradients, None, None, None
 
+class GATGNN(nn.Module):
+    
+    def __init__(self, n_heads=1, edge_dimensions=1):
+        super().__init__()
+        
+        self.gat1 = nng.GATv2Conv(-1, 16, heads=n_heads, concat=False, edge_dim=edge_dimensions, add_self_loops=False)
+        self.gat2 = nng.GATv2Conv(16, 32, heads=n_heads, concat=False, edge_dim=edge_dimensions, add_self_loops=False)
+        
+    def forward(self, x, edges, edge_weights):
+
+        x, (_, edge_weights) = self.gat1(x, edges, edge_weights, return_attention_weights=True)
+        x = torch.nn.functional.relu(x, inplace=True)
+        x, (edges, edge_weights) = self.gat2(x, edges, edge_weights, return_attention_weights=True)
+        
+        return edges, edge_weights
+    
+class TransformerGNN(nn.Module):
+    
+    def __init__(self, n_heads=1, edge_dimensions=1):
+        super().__init__()
+        
+        self.t1 = nng.TransformerConv(-1, 16, heads=n_heads, concat=False, edge_dim=edge_dimensions, add_self_loops=False)
+        self.t2 = nng.TransformerConv(16, 32, heads=n_heads, concat=False, edge_dim=edge_dimensions, add_self_loops=False)
+        
+    def forward(self, x, edges, edge_weights):
+        x, (_, edge_weights) = self.t1(x, edges, edge_weights, return_attention_weights=True)
+        x = torch.nn.functional.relu(x, inplace=True)
+        x, (edges, edge_weights) = self.t2(x, edges, edge_weights, return_attention_weights=True)
+        
+        return edges, edge_weights
 
 def main():
 
@@ -142,6 +173,33 @@ def main():
 
     print(loss)
 
+def test_nn():
+    
+    n_nodes = 64
+    node_dimensions = 4
+    
+    edge_dimensions = 1
+    
+    x = torch.randn((n_nodes, node_dimensions))
+    node_range = torch.arange(0, n_nodes)
+    edges = torch.tensor([
+        [0, 1, 8, 1, 0, 0, 45, 22],
+        [1, 3, 18, 7, 7, 6, 5, 2]
+    ])
+    weights = torch.randn((edges.shape[1], 1))
+    
+    gat_model = GATGNN()
+    edges, weights_new = gat_model(x, edges, weights)
+
+    print(f"{weights[:10]=}")
+    print(f"{weights_new[:10]=}")
+
+    trans_model = TransformerGNN()
+    edges, weights_new = trans_model(x, edges, weights)
+    
+    print(f"{weights[:10]=}")
+    print(f"{weights_new[:10]=}")
+    
 
 def stim_mwpm():
 
@@ -188,4 +246,5 @@ def stim_mwpm():
 
 if __name__ == "__main__":
     # stim_mwpm()
-    main()
+    # main()
+    test_nn()
