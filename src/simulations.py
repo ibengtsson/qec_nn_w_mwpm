@@ -22,6 +22,9 @@ class QECCodeSim:
         )
 
         self.compiled_sampler = self.circuit.compile_detector_sampler(seed=seed)
+        detector_coords, detector_indx = self.get_detector_coords()
+        self.det_coords = detector_coords
+        self.detector_indx = detector_indx
         
     def get_circuit(self):
         return self.circuit
@@ -37,7 +40,20 @@ class QECCodeSim:
         # convert to integers
         det_coords = det_coords.astype(np.uint8)
 
-        return det_coords
+        # create a dictionary which gives detector X_i or Z_i given coordinate tuple(x, y, t)
+        # False == Z and True == X in xz_map
+        xz_map = (np.indices((self.distance + 1, self.distance + 1)).sum(axis=0) % 2).astype(bool)
+        det_indx = np.arange(det_coords.shape[0])
+        x_or_z = np.array([xz_map[cord[0], cord[1]] for cord in det_coords])
+        
+        x_dict = dict([(tuple(cord), ind) for cord, ind in zip(det_coords[x_or_z, :], det_indx[x_or_z])])
+        z_dict = dict([(tuple(cord), ind) for cord, ind in zip(det_coords[~x_or_z, :], det_indx[~x_or_z])])
+        
+        detectors = {}
+        detectors["x"] = x_dict
+        detectors["z"] = z_dict
+        
+        return det_coords, detectors
 
     def sample_syndromes(self, n_shots=None):
         if n_shots == None:
@@ -102,7 +118,8 @@ class SurfaceCodeSim(QECCodeSim):
         return np.dstack([syndrome_x + syndrome_z] * (self.repetitions + 1))
 
     def generate_syndromes(self, n_syndromes=None, n_shots=None):
-        det_coords = super().get_detector_coords()
+        # det_coords = super().get_detector_coords()
+        
         stabilizer_changes, flips, n_trivial_preds = super().sample_syndromes(n_shots)
 
         mask = np.repeat(
@@ -110,7 +127,7 @@ class SurfaceCodeSim(QECCodeSim):
         )
         syndromes = np.zeros_like(mask)
         syndromes[
-            :, det_coords[:, 1], det_coords[:, 0], det_coords[:, 2]
+            :, self.det_coords[:, 1], self.det_coords[:, 0], self.det_coords[:, 2]
         ] = stabilizer_changes
 
         syndromes[..., 1:] = (syndromes[..., 1:] - syndromes[..., 0:-1]) % 2
