@@ -10,6 +10,7 @@ import sys
 
 sys.path.append("../")
 from src.simulations import SurfaceCodeSim
+from src.graph import get_batch_of_graphs
 
 
 class MWPM:
@@ -44,7 +45,7 @@ class MWPMLoss(torch.autograd.Function):
     def forward(
         ctx,
         edge_weights: torch.Tensor,
-        syndromes,
+        syndromes: np.ndarray,
         edges: torch.Tensor,
         labels: np.ndarray,
         circuit: stim.Circuit,
@@ -114,36 +115,95 @@ class MWPMLoss(torch.autograd.Function):
         gradients /= prediction.shape[0]
         return None, None, gradients, None, None, None
 
+
 class GATGNN(nn.Module):
-    
+
     def __init__(self, n_heads=1, edge_dimensions=1):
         super().__init__()
-        
-        self.gat1 = nng.GATv2Conv(-1, 16, heads=n_heads, concat=False, edge_dim=edge_dimensions, add_self_loops=False)
-        self.gat2 = nng.GATv2Conv(16, 32, heads=n_heads, concat=False, edge_dim=edge_dimensions, add_self_loops=False)
-        
+
+        self.gat1 = nng.GATv2Conv(
+            -1,
+            16,
+            heads=n_heads,
+            concat=False,
+            edge_dim=edge_dimensions,
+            add_self_loops=False,
+        )
+        self.gat2 = nng.GATv2Conv(
+            16,
+            32,
+            heads=n_heads,
+            concat=False,
+            edge_dim=edge_dimensions,
+            add_self_loops=False,
+        )
+
     def forward(self, x, edges, edge_weights):
 
-        x, (_, edge_weights) = self.gat1(x, edges, edge_weights, return_attention_weights=True)
+        x, (_, edge_weights) = self.gat1(
+            x, edges, edge_weights, return_attention_weights=True
+        )
         x = torch.nn.functional.relu(x, inplace=True)
-        x, (edges, edge_weights) = self.gat2(x, edges, edge_weights, return_attention_weights=True)
-        
+        x, (edges, edge_weights) = self.gat2(
+            x, edges, edge_weights, return_attention_weights=True
+        )
+
         return edges, edge_weights
-    
+
+
 class TransformerGNN(nn.Module):
-    
+
     def __init__(self, n_heads=1, edge_dimensions=1):
         super().__init__()
-        
-        self.t1 = nng.TransformerConv(-1, 16, heads=n_heads, concat=False, edge_dim=edge_dimensions, add_self_loops=False)
-        self.t2 = nng.TransformerConv(16, 32, heads=n_heads, concat=False, edge_dim=edge_dimensions, add_self_loops=False)
-        
+
+        self.t1 = nng.TransformerConv(
+            -1,
+            16,
+            heads=n_heads,
+            concat=False,
+            edge_dim=edge_dimensions,
+            add_self_loops=False,
+        )
+        self.t2 = nng.TransformerConv(
+            16,
+            32,
+            heads=n_heads,
+            concat=False,
+            edge_dim=edge_dimensions,
+            add_self_loops=False,
+        )
+
     def forward(self, x, edges, edge_weights):
-        x, (_, edge_weights) = self.t1(x, edges, edge_weights, return_attention_weights=True)
+        x, (_, edge_weights) = self.t1(
+            x, edges, edge_weights, return_attention_weights=True
+        )
         x = torch.nn.functional.relu(x, inplace=True)
-        x, (edges, edge_weights) = self.t2(x, edges, edge_weights, return_attention_weights=True)
-        
+        x, (edges, edge_weights) = self.t2(
+            x, edges, edge_weights, return_attention_weights=True
+        )
+
         return edges, edge_weights
+
+
+# FIX DOUBLE EDGES (node i -> j and j -> i are both included)
+def reshape_edges(edges, edge_weights, batch_labels, n_nodes):
+    node_range = torch.arange(0, n_nodes)
+
+    edges_per_syndrome = []
+    weights_per_syndrome = []
+    for i in range(batch_labels[-1] + 1):
+        ind_range = torch.nonzero(batch_labels == i)
+        edge_mask = (edges >= node_range[ind_range[0]]) & (
+            edges <= node_range[ind_range[-1]]
+        )
+        new_edges = edges[:, edge_mask[0, :]]
+        new_weights = edge_weights[edge_mask[0, :]]
+
+        edges_per_syndrome.append(new_edges)
+        weights_per_syndrome.append(new_weights)
+
+    return edges_per_syndrome, weights_per_syndrome
+
 
 def main():
 
@@ -173,21 +233,19 @@ def main():
 
     print(loss)
 
+
 def test_nn():
-    
+
     n_nodes = 64
     node_dimensions = 4
-    
+
     edge_dimensions = 1
-    
+
     x = torch.randn((n_nodes, node_dimensions))
     node_range = torch.arange(0, n_nodes)
-    edges = torch.tensor([
-        [0, 1, 8, 1, 0, 0, 45, 22],
-        [1, 3, 18, 7, 7, 6, 5, 2]
-    ])
+    edges = torch.tensor([[0, 1, 8, 1, 0, 0, 45, 22], [1, 3, 18, 7, 7, 6, 5, 2]])
     weights = torch.randn((edges.shape[1], 1))
-    
+
     gat_model = GATGNN()
     edges, weights_new = gat_model(x, edges, weights)
 
@@ -196,10 +254,10 @@ def test_nn():
 
     trans_model = TransformerGNN()
     edges, weights_new = trans_model(x, edges, weights)
-    
+
     print(f"{weights[:10]=}")
     print(f"{weights_new[:10]=}")
-    
+
 
 def stim_mwpm():
 
@@ -217,18 +275,18 @@ def stim_mwpm():
     )
 
     reps = 1
-    code_sz = 3
+    code_sz = 5
     p = 1e-1
-    n_shots = 10
+    n_shots = 100
     # sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
     circuit = stim.Circuit.generated(
         "surface_code:rotated_memory_z",
         rounds=reps,
         distance=code_sz,
-        after_clifford_depolarization=p,
+        after_clifford_depolarization=0,
         after_reset_flip_probability=0,
-        before_measure_flip_probability=p,
-        before_round_data_depolarization=0,
+        before_measure_flip_probability=0,
+        before_round_data_depolarization=p,
     )
     # circuit = sim.get_circuit()
     det_coords = circuit.get_detector_coordinates()
@@ -243,8 +301,59 @@ def stim_mwpm():
     print(preds)
     print(matching)
 
+    import matplotlib.pyplot as plt
+
+    matching.draw()
+    plt.show()
+
+
+def graphs():
+
+    reps = 1
+    code_sz = 3
+    p = 5e-3
+    n_shots = 100
+    sim = SurfaceCodeSim(
+        reps, code_sz, p, n_shots, code_task="surface_code:rotated_memory_z"
+    )
+    syndromes, flips, _ = sim.generate_syndromes(n_shots)
+
+    x, edge_index, edge_attr, batch_labels = get_batch_of_graphs(
+        syndromes, m_nearest_nodes=5
+    )
+
+    node_range = torch.arange(0, x.shape[0])
+    
+    edges_per_syndrome, weights_per_syndrome = reshape_edges(edge_index, edge_attr, batch_labels, x.shape[0])
+    print(batch_labels)
+
+    for i in range(100):
+        ind_range = torch.nonzero(batch_labels == i)
+
+        if ind_range.shape[0] == 1:
+            print("No edges!")
+        else:
+            edge_mask = (edge_index >= node_range[ind_range[0]]) & (
+                edge_index <= node_range[ind_range[-1]]
+            )
+
+            new_edges = edge_index[:, edge_mask[0, :]]
+            new_weights = edge_attr[edge_mask[0, :]]
+            print(new_edges)
+            print(edges_per_syndrome[i])
+            print(new_weights)
+            print(weights_per_syndrome[i])
+            
+            sort_ind = torch.argsort(new_edges[0, :])
+            
+            new_edges = new_edges[:, sort_ind[:new_edges.shape[1] // 2]]
+            print(new_edges)
+        if i == 10:
+            break
+
 
 if __name__ == "__main__":
     # stim_mwpm()
     # main()
-    test_nn()
+    # test_nn()
+    graphs()
