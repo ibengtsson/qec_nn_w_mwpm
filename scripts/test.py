@@ -274,8 +274,8 @@ def stim_mwpm():
         ]
     )
 
-    reps = 1
-    code_sz = 5
+    reps = 2
+    code_sz = 3
     p = 1e-1
     n_shots = 100
     # sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
@@ -283,35 +283,59 @@ def stim_mwpm():
         "surface_code:rotated_memory_z",
         rounds=reps,
         distance=code_sz,
-        after_clifford_depolarization=0,
-        after_reset_flip_probability=0,
-        before_measure_flip_probability=0,
+        after_clifford_depolarization=p,
+        after_reset_flip_probability=p,
+        before_measure_flip_probability=p,
         before_round_data_depolarization=p,
     )
     # circuit = sim.get_circuit()
     det_coords = circuit.get_detector_coordinates()
+
     matching = pm.Matching.from_stim_circuit(circuit)
-    print(det_coords)
 
     sampler = circuit.compile_detector_sampler()
     syndromes, flips = sampler.sample(n_shots, separate_observables=True)
 
-    print(syndromes[0].shape)
+    # print(syndromes[0].shape)
     preds = matching.decode(syndromes[0])
-    print(preds)
+    # print(preds)
+    
     print(matching)
+    # print(matching.edges())
+    
+    # print(circuit)
+    
+    det_coords = circuit.get_detector_coordinates()
+    det_coords = np.array(list(det_coords.values()))
 
-    import matplotlib.pyplot as plt
+    # rescale space like coordinates:
+    det_coords[:, :2] = det_coords[:, :2] / 2
+    # convert to integers
+    det_coords = det_coords.astype(np.uint8)
 
-    matching.draw()
-    plt.show()
+    xz_map = (np.indices((code_sz + 1, code_sz + 1)).sum(axis=0) % 2).astype(bool)
+    det_indx = np.arange(det_coords.shape[0])
+    x_or_z = np.array([xz_map[cord[0], cord[1]] for cord in det_coords])
+    
+    x_dict = dict([(tuple(cord), ind) for cord, ind in zip(det_coords[x_or_z, :], det_indx[x_or_z])])
+    z_dict = dict([(tuple(cord), ind) for cord, ind in zip(det_coords[~x_or_z, :], det_indx[~x_or_z])])
+    
+    detectors = {}
+    detectors["x"] = x_dict
+    detectors["z"] = z_dict
+    
+    print(detectors)
+    # import matplotlib.pyplot as plt
+
+    # matching.draw()
+    # plt.show()
 
 
 def graphs():
 
-    reps = 1
+    reps = 2
     code_sz = 3
-    p = 5e-3
+    p = 1e-3
     n_shots = 100
     sim = SurfaceCodeSim(
         reps, code_sz, p, n_shots, code_task="surface_code:rotated_memory_z"
@@ -321,39 +345,13 @@ def graphs():
     x, edge_index, edge_attr, batch_labels = get_batch_of_graphs(
         syndromes, m_nearest_nodes=5
     )
-
-    node_range = torch.arange(0, x.shape[0])
+    print(sim.detector_indx)
+    
     
     edges_per_syndrome, weights_per_syndrome = reshape_edges(edge_index, edge_attr, batch_labels, x.shape[0])
-    print(batch_labels)
-
-    for i in range(100):
-        ind_range = torch.nonzero(batch_labels == i)
-
-        if ind_range.shape[0] == 1:
-            print("No edges!")
-        else:
-            edge_mask = (edge_index >= node_range[ind_range[0]]) & (
-                edge_index <= node_range[ind_range[-1]]
-            )
-
-            new_edges = edge_index[:, edge_mask[0, :]]
-            new_weights = edge_attr[edge_mask[0, :]]
-            print(new_edges)
-            print(edges_per_syndrome[i])
-            print(new_weights)
-            print(weights_per_syndrome[i])
-            
-            sort_ind = torch.argsort(new_edges[0, :])
-            
-            new_edges = new_edges[:, sort_ind[:new_edges.shape[1] // 2]]
-            print(new_edges)
-        if i == 10:
-            break
-
 
 if __name__ == "__main__":
-    # stim_mwpm()
+    stim_mwpm()
     # main()
     # test_nn()
     graphs()
