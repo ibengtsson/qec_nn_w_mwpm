@@ -91,9 +91,6 @@ class RepetitionCodeSim(QECCodeSim):
     def syndrome_mask(self):
         sz = self.distance 
         
-        
-
-
 class SurfaceCodeSim(QECCodeSim):
     def __init__(
         self,
@@ -118,8 +115,6 @@ class SurfaceCodeSim(QECCodeSim):
         return np.dstack([syndrome_x + syndrome_z] * (self.repetitions + 1))
 
     def generate_syndromes(self, n_syndromes=None, n_shots=None):
-        # det_coords = super().get_detector_coords()
-        
         stabilizer_changes, flips, n_trivial_preds = super().sample_syndromes(n_shots)
 
         mask = np.repeat(
@@ -129,8 +124,9 @@ class SurfaceCodeSim(QECCodeSim):
         syndromes[
             :, self.det_coords[:, 1], self.det_coords[:, 0], self.det_coords[:, 2]
         ] = stabilizer_changes
-
-        syndromes[..., 1:] = (syndromes[..., 1:] - syndromes[..., 0:-1]) % 2
+        
+        # legacy error? the difference is already "baked in" within Stim?
+        # syndromes[..., 1:] = (syndromes[..., 1:] - syndromes[..., 0:-1]) % 2
         syndromes[np.nonzero(syndromes)] = mask[np.nonzero(syndromes)]
 
         # make sure we get enough non-trivial syndromes if a certain number is desired
