@@ -132,12 +132,12 @@ def get_3D_graph(syndrome_3D, target=None, m_nearest_nodes=None, power=None):
 def cylinder_distance(x, y, width, wrap_axis=1, manhattan=False):
     # x, y have coordinates (x, y, t)
     
-    ds = np.abs(x - y)
+    ds = torch.abs(x - y)
     eq_class = ds[:, wrap_axis] > 0.5 * width
     ds[eq_class, wrap_axis] = width - ds[eq_class, wrap_axis]
     
     if not manhattan:
-        return np.sqrt((ds ** 2).sum(axis=1)), eq_class
+        return torch.sqrt((ds ** 2).sum(axis=1)), eq_class
     else:
         return ds.sum(axis=1), eq_class
 
@@ -145,6 +145,8 @@ def cylinder_distance(x, y, width, wrap_axis=1, manhattan=False):
 def get_batch_of_graphs(
     syndromes,
     m_nearest_nodes,
+    code_distance,
+    experiment="z",
     n_node_features=5,
     power=2.0,
     device=torch.device("cpu"),
@@ -178,7 +180,12 @@ def get_batch_of_graphs(
     edge_index = knn_graph(pos, m_nearest_nodes, batch=batch_labels)
     
     # compute distances to get edge attributes
-    dist = torch.sqrt(((pos[edge_index[0], :] - pos[edge_index[1], :])**2).sum(dim=1, keepdim=True))
-    edge_attr = 1 / dist ** power
+    width = code_distance + 1
+    if experiment == "z":
+        wrap_axis = 1
+    else:
+        wrap_axis = 0
+    dist, eq_class = cylinder_distance(pos[edge_index[0], :], pos[edge_index[1], :], width, wrap_axis=wrap_axis)
+    edge_attr = torch.stack((dist**2, eq_class), dim=1)
 
     return x, edge_index, edge_attr, batch_labels
