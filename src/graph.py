@@ -128,6 +128,18 @@ def get_3D_graph(syndrome_3D, target=None, m_nearest_nodes=None, power=None):
         torch.from_numpy(edge_attr.astype(np.float32)),
         torch.from_numpy(y.astype(np.float32)),
     ]
+    
+def cylinder_distance(x, y, width, wrap_axis=1, manhattan=False):
+    # x, y have coordinates (x, y, t)
+    
+    ds = np.abs(x - y)
+    eq_class = ds[:, wrap_axis] > 0.5 * width
+    ds[eq_class, wrap_axis] = width - ds[eq_class, wrap_axis]
+    
+    if not manhattan:
+        return np.sqrt((ds ** 2).sum(axis=1)), eq_class
+    else:
+        return ds.sum(axis=1), eq_class
 
 
 def get_batch_of_graphs(
