@@ -45,49 +45,6 @@ def nx_mwpm():
     return m
 
 
-def reshape_edges(edges, edge_weights, batch_labels, n_nodes):
-    node_range = torch.arange(0, n_nodes)
-
-    edges_per_syndrome = []
-    weights_per_syndrome = []
-    for i in range(batch_labels[-1] + 1):
-        ind_range = torch.nonzero(batch_labels == i)
-        edge_mask = (edges >= node_range[ind_range[0]]) & (
-            edges <= node_range[ind_range[-1]]
-        )
-        new_edges = edges[:, edge_mask[0, :]]
-        new_weights = edge_weights[edge_mask[0, :]]
-
-        edges_per_syndrome.append(new_edges)
-        weights_per_syndrome.append(new_weights)
-
-    return edges_per_syndrome, weights_per_syndrome
-
-
-
-def graphs():
-
-    reps = 2
-    code_sz = 3
-    p = 1e-3
-    n_shots = 100
-    sim = SurfaceCodeSim(
-        reps, code_sz, p, n_shots, code_task="surface_code:rotated_memory_z"
-    )
-    syndromes, flips, _ = sim.generate_syndromes(n_shots)
-
-    x, edge_index, edge_attr, batch_labels = get_batch_of_graphs(
-        syndromes, m_nearest_nodes=5
-    )
-    print(sim.detector_indx)
-    
-    
-    edges_per_syndrome, weights_per_syndrome = reshape_edges(edge_index, edge_attr, batch_labels, x.shape[0])
-
 if __name__ == "__main__":
-    #stim_mwpm()
-    # main()
-    # test_nn()
-    #graphs()
     nx_mwpm()
 
