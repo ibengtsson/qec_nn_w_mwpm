@@ -1,4 +1,5 @@
 """Package with functions for creating graph representations of syndromes."""
+
 import numpy as np
 import torch
 from torch_geometric.nn import knn_graph
@@ -128,16 +129,17 @@ def get_3D_graph(syndrome_3D, target=None, m_nearest_nodes=None, power=None):
         torch.from_numpy(edge_attr.astype(np.float32)),
         torch.from_numpy(y.astype(np.float32)),
     ]
-    
+
+
 def cylinder_distance(x, y, width, wrap_axis=1, manhattan=False):
     # x, y have coordinates (x, y, t)
-    
+
     ds = torch.abs(x - y)
     eq_class = ds[:, wrap_axis] > 0.5 * width
     ds[eq_class, wrap_axis] = width - ds[eq_class, wrap_axis]
-    
+
     if not manhattan:
-        return torch.sqrt((ds ** 2).sum(axis=1)), eq_class
+        return torch.sqrt((ds**2).sum(axis=1)), eq_class
     else:
         return ds.sum(axis=1), eq_class
 
@@ -177,18 +179,73 @@ def get_batch_of_graphs(
     pos = x[:, 2:]
 
     # get edge indices
-    edge_index = knn_graph(pos, m_nearest_nodes, batch=batch_labels)
-    
+    if m_nearest_nodes:
+        edge_index = knn_graph(pos, m_nearest_nodes, batch=batch_labels)
+    else:
+        n = x.shape[0]
+        edge_index = torch.cat(
+            (
+                torch.triu_indices(n, n, offset=1),
+                torch.flipud(torch.triu_indices(n, n, offset=1)),
+            ),
+            axis=1,
+        )
+
     # compute distances to get edge attributes
     width = code_distance + 1
     if experiment == "z":
         wrap_axis = 1
     else:
         wrap_axis = 0
-    dist, eq_class = cylinder_distance(pos[edge_index[0], :], pos[edge_index[1], :], width, wrap_axis=wrap_axis)
-    
+    dist, eq_class = cylinder_distance(
+        pos[edge_index[0], :], pos[edge_index[1], :], width, wrap_axis=wrap_axis
+    )
+
     # cast eq_class to float32
     eq_class = eq_class.type(dtype=torch.float32)
     edge_attr = torch.stack((dist**power, eq_class), dim=1)
 
     return x, edge_index, edge_attr, batch_labels
+
+def extract_graphs(x, edges, edge_attr, batch_labels):
+
+    node_range = torch.arange(0, x.shape[0])
+
+    nodes_per_syndrome = []
+    edges_per_syndrome = []
+    weights_per_syndrome = []
+    classes_per_syndrome = []
+    edge_indx = []
+    edge_weights = edge_attr[:, 0]
+    edge_classes = edge_attr[:, 1]
+    for i in range(batch_labels[-1] + 1):
+        ind_range = torch.nonzero(batch_labels == i)
+
+        # nodes
+        nodes_per_syndrome.append(x[ind_range])
+
+        # edges
+        edge_mask = (edges >= node_range[ind_range[0]]) & (
+            edges <= node_range[ind_range[-1]]
+        )
+        new_edges = edges[:, edge_mask[0, :]] - node_range[ind_range[0]]
+        new_weights = edge_weights[edge_mask[0, :]]
+        new_edge_classes = edge_classes[edge_mask[0, :]]
+
+        edges_per_syndrome.append(new_edges)
+        weights_per_syndrome.append(new_weights)
+        classes_per_syndrome.append(new_edge_classes)
+
+        # map edges per graph to their original index in the edges array
+        # detector_edges = [(detectors[tuple(x[edge[0], 2:].numpy())], detectors[tuple(x[edge[1], 2:].numpy())]) for edge in new_edges.T]
+
+        edge_range = torch.arange(0, edges.shape[1])
+        edge_indx.append(edge_range[edge_mask[0, :]])
+
+    return (
+        nodes_per_syndrome,
+        edges_per_syndrome,
+        weights_per_syndrome,
+        classes_per_syndrome,
+        edge_indx,
+    )
