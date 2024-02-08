@@ -14,16 +14,25 @@ sys.path.append("../")
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
 
-def get_mwpm(edges, weights):
-    
+
+def mwpm_prediction(edges, weights, classes):
+
     # convert edges to dict
+    classes = (classes > 0.0).astype(np.int32)
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
+    edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
     matched_edges = mwpm(edges_w_weights)
     
+    # need to make sure matched_edges is sorted
+    matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
+
+    # REMOVE IF WHEN WE HAVE ENSURED THAT THERE IS ALWAYS AN EVEN NUMBER OF EDGES
     if matched_edges:
-        return np.array(list(map(lambda x: x[0] + x[1], matched_edges))).sum() & 1
+        classes = np.array([edges_w_classes[edge] for edge in matched_edges])
+        return classes.sum() & 1
     else:
-        return 0
+        return 1
+
 
 class MWPM:
 
@@ -35,7 +44,7 @@ class MWPM:
         self.decoder.add_edge(edge[0], edge[1], weight=weight, merge_strategy="replace")
 
     def update_edges(self, nodes, edges, edge_weights):
-        
+
         # only care about edges belonging to exp
         for nodes, weight in zip(edges.T, edge_weights):
             self.decoder.add_edge(
@@ -62,47 +71,63 @@ class MWPMLoss(torch.autograd.Function):
         ctx,
         x: torch.Tensor,
         edge_indx: torch.Tensor,
-        edge_weights: torch.Tensor,
+        edge_attr: torch.Tensor,
         batch_labels: torch.Tensor,
-        syndromes: np.ndarray,
         labels: np.ndarray,
-        detector_dict: dict,
-        experiment: np.ndarray,
-        delta=1,
+        factor=1.2,
     ):
 
         # split edges and edge weights per syndrome
-        nodes_p_graph, edges_p_graph, weights_p_graph, edge_map = extract_graphs(
+        (
+            _,
+            edges_p_graph,
+            weights_p_graph,
+            classes_p_graph,
+            edge_map_p_graph,
+        ) = extract_graphs(
             x,
             edge_indx,
-            edge_weights,
+            edge_attr,
             batch_labels,
         )
 
         # we must loop through every graph since each one will have given a new set of edge weights
-        # MUST FIX!
         preds = []
-        preds_grad = []
-        for syndrome, nodes, edges, weights, exp in zip(
-            syndromes, nodes_p_graph, edges_p_graph, weights_p_graph, experiment
+        preds_grad = torch.zeros_like(edge_attr)
+        grad_help = torch.zeros_like(edge_attr)
+
+        for i, (edges, weights, classes, edge_map) in enumerate(
+            zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph)
         ):
 
-            # DUMMY FUNCTION
             edges = edges.detach().numpy()
             weights = weights.detach().numpy()
-            prediction = get_mwpm(edges, weights)
+            classes = classes.detach().numpy()
+
+            prediction = mwpm_prediction(edges, weights, classes)
             preds.append(prediction)
 
             # we need a workaround for gradient computations
             preds_partial_de = []
             for i in range(edges.shape[1]):
                 _weights = weights
-                _weights[i] += delta
-                prediction = get_mwpm(edges, _weights)
-                preds_partial_de.append(prediction)
+                _weights[i] *= factor
 
-            preds_grad.append(torch.tensor(preds_partial_de, dtype=torch.float32))
-        preds_grad = torch.nested.as_nested_tensor(preds_grad)
+                _classes = classes
+                _classes[i] *= factor
+                pred_w = mwpm_prediction(edges, _weights, classes)
+                pred_c = mwpm_prediction(edges, weights, _classes)
+                preds_partial_de.append([pred_w, pred_c])
+                
+            # REMOVE WHEN WE KNOW THAT ALL SYNDROMES HAVE AN EDGE
+            if edge_map.numel() == 0:
+                continue
+            else:
+                preds_grad[edge_map, :] = torch.tensor(
+                    preds_partial_de, dtype=torch.float32
+                )
+                grad_help[edge_map, 0] = prediction
+                grad_help[edge_map, 1] = labels[i]
         preds = np.array(preds)
 
         # compute accuracy
@@ -112,10 +137,8 @@ class MWPMLoss(torch.autograd.Function):
         loss = 1 - accuracy
 
         ctx.save_for_backward(
-            torch.tensor(preds, dtype=torch.float32),
             preds_grad,
-            torch.tensor(labels, dtype=torch.float32),
-            torch.tensor(delta),
+            grad_help,
         )
 
         return torch.tensor(loss, requires_grad=True)
@@ -125,17 +148,11 @@ class MWPMLoss(torch.autograd.Function):
         ctx,
         grad_output,
     ):
-        preds, preds_grad, labels, delta = ctx.saved_tensors
-        gradients = torch.zeros(preds_grad.shape, requires_grad=True)
-
-        # NEEDS A FIX TO ENSURE GRADIENTS ARE ADDED CORRECTLY! NOW ITS ASSUMED ITS ALWAYS THE SAME EDGE WEIGHTS THAT ARE PASSED THROUGH NN
-        for prediction, label, prediction_de in zip(preds, labels, preds_grad):
-            grad = (prediction - label) * (prediction_de - prediction) / delta
-
-            # THIS PART MUST BE FIXED
-            gradients += grad
-        gradients /= prediction.shape[0]
-        return None, None, gradients, None, None, None, None, None
+        preds, grad_help = ctx.saved_tensors
+        print(preds.shape, grad_help.shape)
+        gradients = (grad_help[:, 0] - grad_help[:, 1])[:, None] * (preds - grad_help[:, 0][:, None])
+        gradients.requires_grad = True
+        return None, None, gradients, None, None, None
 
 
 class GATGNN(nn.Module):
@@ -208,7 +225,7 @@ class TransformerGNN(nn.Module):
 
 
 # FIX DOUBLE EDGES (node i -> j and j -> i are both included)
-def extract_graphs(x, edges, edge_attr, batch_labels, detectors):
+def extract_graphs(x, edges, edge_attr, batch_labels):
 
     node_range = torch.arange(0, x.shape[0])
 
@@ -218,7 +235,7 @@ def extract_graphs(x, edges, edge_attr, batch_labels, detectors):
     classes_per_syndrome = []
     edge_indx = []
     edge_weights = edge_attr[:, 0]
-    edge_classes = edge_attr[: 1]
+    edge_classes = edge_attr[:, 1]
     for i in range(batch_labels[-1] + 1):
         ind_range = torch.nonzero(batch_labels == i)
 
@@ -236,48 +253,43 @@ def extract_graphs(x, edges, edge_attr, batch_labels, detectors):
         edges_per_syndrome.append(new_edges)
         weights_per_syndrome.append(new_weights)
         classes_per_syndrome.append(new_edge_classes)
-        
-        # map edges per graph to their original index in the edges array
-        detector_edges = [(detectors[tuple(x[edge[0], 2:].numpy())], detectors[tuple(x[edge[1], 2:].numpy())]) for edge in new_edges.T]
-    
-        
-        # edge_range = torch.arange(0, edges.shape[0])
-        # edge_indx.append(edge_range[edge_mask])
-        
 
-    return nodes_per_syndrome, edges_per_syndrome, weights_per_syndrome, classes_per_syndrome, edge_indx, detector_edges
+        # map edges per graph to their original index in the edges array
+        # detector_edges = [(detectors[tuple(x[edge[0], 2:].numpy())], detectors[tuple(x[edge[1], 2:].numpy())]) for edge in new_edges.T]
+
+        edge_range = torch.arange(0, edges.shape[1])
+        edge_indx.append(edge_range[edge_mask[0, :]])
+
+    return (
+        nodes_per_syndrome,
+        edges_per_syndrome,
+        weights_per_syndrome,
+        classes_per_syndrome,
+        edge_indx,
+    )
 
 
 def main():
 
     reps = 1
     code_sz = 3
-    p = 1e-1
-    n_shots = 100
-  
+    p = 5e-3
+    n_shots = 10000
+
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
     syndromes, flips, _ = sim.generate_syndromes(n_shots)
-    dist, eq_class = get_batch_of_graphs(syndromes, 10, code_sz)
-    
-    print(dist.shape)
-    print(eq_class.shape)
-    print(torch.stack((dist, eq_class), dim=1).shape)
-    return
-    x, edges, weights, batch_labels = get_batch_of_graphs(syndromes, 10)
+    x, edges, edge_attr, batch_labels = get_batch_of_graphs(syndromes, 20, code_sz)
 
-    detector_dict = sim.detector_indx
-    print(detector_dict["z"])
-    nodes_per_syndrome, edges_per_syndrome, weights_per_syndrome, edge_indx, detector_edges = extract_graphs(x, edges, weights, batch_labels, detector_dict["z"])
-    
-    print(detector_edges)
-    return
-    delta = 0.5
     loss_fun = MWPMLoss.apply
-    exp = ["z"] * syndromes.shape[0]
-    weights.requires_grad = True
-    loss = loss_fun(x, edges, weights, batch_labels, syndromes, np.array(flips) * 1, sim.detector_indx, exp, delta)
+    edge_attr.requires_grad = True
+    loss = loss_fun(
+        x,
+        edges,
+        edge_attr,
+        batch_labels,
+        np.array(flips) * 1,
+    )
     loss.backward()
-
     print(loss)
 
 
@@ -305,8 +317,9 @@ def test_nn():
     print(f"{weights[:10]=}")
     print(f"{weights_new[:10]=}")
 
+
 def py_match():
-    
+
     H = np.array(
         [
             [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -319,11 +332,12 @@ def py_match():
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
         ]
     )
-    
+
     matching = pm.Matching.from_check_matrix(H, repetitions=1)
     print(matching)
     matching.draw()
     plt.show()
+
 
 def stim_mwpm():
 
@@ -341,19 +355,19 @@ def stim_mwpm():
         before_measure_flip_probability=p,
         before_round_data_depolarization=p,
     )
-    
+
     sampler = circuit.compile_detector_sampler()
     detectors, flips = sampler.sample(n_shots, separate_observables=True)
-    
+
     det_coords = circuit.get_detector_coordinates()
     det_coords = np.array(list(det_coords.values()))
 
     # rescale space like coordinates:
     det_coords[:, :2] = det_coords[:, :2] / 2
-    
+
     # convert to integers
     det_coords = det_coords.astype(np.uint8)
-    
+
     xz_map = (np.indices((code_sz + 1, code_sz + 1)).sum(axis=0) % 2).astype(bool)
     det_indx = np.arange(det_coords.shape[0])
     x_or_z = np.array([xz_map[cord[0], cord[1]] for cord in det_coords])
@@ -384,22 +398,18 @@ def stim_mwpm():
     syndrome_z = np.rot90(syndrome_x) * 3
 
     mask = np.dstack([syndrome_x + syndrome_z] * (reps + 1))
-    mask = np.repeat(
-            mask[None, ...], detectors.shape[0], 0
-        )
+    mask = np.repeat(mask[None, ...], detectors.shape[0], 0)
     syndromes = np.zeros_like(mask)
-    syndromes[
-        :, det_coords[:, 1], det_coords[:, 0], det_coords[:, 2]
-    ] = detectors
+    syndromes[:, det_coords[:, 1], det_coords[:, 0], det_coords[:, 2]] = detectors
 
     # syndromes[..., 1:] = (syndromes[..., 1:] - syndromes[..., 0:-1]) % 2
     syndromes[np.nonzero(syndromes)] = mask[np.nonzero(syndromes)]
-    
+
     sim = SurfaceCodeSim(
         reps, code_sz, p, n_shots, code_task="surface_code:rotated_memory_z"
     )
     detectors, syndromes, flips, _ = sim.generate_syndromes(n_shots)
-    
+
     for i in range(20):
         if flips[i] == 1:
             print(syndromes[i, :, :, 0])
@@ -407,7 +417,7 @@ def stim_mwpm():
             print(syndromes[i, :, :, 1])
             print(detectors[i, 12:])
             print(syndromes[i, :, :, :].sum(axis=-1))
-    
+
     print(detector_dict["z"])
     return
 
@@ -467,21 +477,17 @@ def graphs():
         reps, code_sz, p, n_shots, code_task="surface_code:rotated_memory_z"
     )
     syndromes, flips, _ = sim.sample_syndromes(n_shots)
-    
+
     det_cords, _ = sim.get_detector_coords()
     mask = sim.syndrome_mask()
-    mask = np.repeat(
-            mask[None, ...], syndromes.shape[0], 0
-        )
+    mask = np.repeat(mask[None, ...], syndromes.shape[0], 0)
     print(mask.shape)
-    
+
     test = np.zeros_like(mask)
-    test[
-        :, det_cords[:, 1], det_cords[:, 0], det_cords[:, 2]
-        ] = syndromes
+    test[:, det_cords[:, 1], det_cords[:, 0], det_cords[:, 2]] = syndromes
     print(test[0, :, :, 0])
     print(test[0, :, :, 1])
-    
+
     test[..., 1:] = (test[..., 1:] - test[..., 0:-1]) % 2
     print(test[0, :, :, 0])
     print(test[0, :, :, 1])
@@ -496,13 +502,13 @@ def graphs():
         syndromes, m_nearest_nodes=5
     )
 
-
     nodes_per_syndrome, edges_per_syndrome, weights_per_syndrome = extract_graphs(
         x,
         edge_index,
         edge_attr,
         batch_labels,
     )
+
 
 def check_simulations():
     reps = 7
@@ -516,6 +522,7 @@ def check_simulations():
     n_nodes = np.count_nonzero(syndromes)
     n_nodes = np.count_nonzero(dets)
     print(f"We have on average {n_nodes / n_shots:.2f} nodes.")
+
 
 if __name__ == "__main__":
     # stim_mwpm()
