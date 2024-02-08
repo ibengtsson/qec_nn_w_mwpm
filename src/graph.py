@@ -186,6 +186,9 @@ def get_batch_of_graphs(
     else:
         wrap_axis = 0
     dist, eq_class = cylinder_distance(pos[edge_index[0], :], pos[edge_index[1], :], width, wrap_axis=wrap_axis)
+    
+    # cast eq_class to float32
+    eq_class = eq_class.type(dtype=torch.float32)
     edge_attr = torch.stack((dist**power, eq_class), dim=1)
 
     return x, edge_index, edge_attr, batch_labels
