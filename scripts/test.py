@@ -208,14 +208,17 @@ class TransformerGNN(nn.Module):
 
 
 # FIX DOUBLE EDGES (node i -> j and j -> i are both included)
-def extract_graphs(x, edges, edge_weights, batch_labels, detectors):
+def extract_graphs(x, edges, edge_attr, batch_labels, detectors):
 
     node_range = torch.arange(0, x.shape[0])
 
     nodes_per_syndrome = []
     edges_per_syndrome = []
     weights_per_syndrome = []
+    classes_per_syndrome = []
     edge_indx = []
+    edge_weights = edge_attr[:, 0]
+    edge_classes = edge_attr[: 1]
     for i in range(batch_labels[-1] + 1):
         ind_range = torch.nonzero(batch_labels == i)
 
@@ -228,9 +231,11 @@ def extract_graphs(x, edges, edge_weights, batch_labels, detectors):
         )
         new_edges = edges[:, edge_mask[0, :]] - node_range[ind_range[0]]
         new_weights = edge_weights[edge_mask[0, :]]
+        new_edge_classes = edge_classes[edge_mask[0, :]]
 
         edges_per_syndrome.append(new_edges)
         weights_per_syndrome.append(new_weights)
+        classes_per_syndrome.append(new_edge_classes)
         
         # map edges per graph to their original index in the edges array
         detector_edges = [(detectors[tuple(x[edge[0], 2:].numpy())], detectors[tuple(x[edge[1], 2:].numpy())]) for edge in new_edges.T]
@@ -240,7 +245,7 @@ def extract_graphs(x, edges, edge_weights, batch_labels, detectors):
         # edge_indx.append(edge_range[edge_mask])
         
 
-    return nodes_per_syndrome, edges_per_syndrome, weights_per_syndrome, edge_indx, detector_edges
+    return nodes_per_syndrome, edges_per_syndrome, weights_per_syndrome, classes_per_syndrome, edge_indx, detector_edges
 
 
 def main():
@@ -252,6 +257,12 @@ def main():
   
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
     syndromes, flips, _ = sim.generate_syndromes(n_shots)
+    dist, eq_class = get_batch_of_graphs(syndromes, 10, code_sz)
+    
+    print(dist.shape)
+    print(eq_class.shape)
+    print(torch.stack((dist, eq_class), dim=1).shape)
+    return
     x, edges, weights, batch_labels = get_batch_of_graphs(syndromes, 10)
 
     detector_dict = sim.detector_indx
