@@ -123,8 +123,8 @@ class MWPMLoss(torch.autograd.Function):
         # gradients = (grad_help[:, 0] - grad_help[:, 1])[:, None] * (preds - grad_help[:, 0][:, None])
         # gradients = (0.5 * (preds + grad_help[:, 0][:, None]) - grad_help[:, 1][:, None]) * (preds - grad_help[:, 0][:, None])
         gradients = 0.5 * ((preds - grad_help[:, 1][:, None]) - torch.abs((preds - grad_help[:, 1][:, None] - 1)))
-        gradients = (preds - grad_help[:, 0][:, None] - 0.5) / 0.1
-        gradients = torch.ones_like(preds)
+        # gradients = (preds - grad_help[:, 0][:, None] - 0.5) / 0.1
+        # gradients = torch.ones_like(preds)
         # gradients = torch.randn_like(preds)
         gradients.requires_grad = True
         # print(gradients[:100])
