@@ -154,12 +154,11 @@ def get_batch_of_graphs(
     device=torch.device("cpu"),
 ):
     syndromes = syndromes.astype(np.float32)
-
+    
     defect_inds = np.nonzero(syndromes)
     defects = syndromes[defect_inds]
-
+    
     defect_inds = np.transpose(np.array(defect_inds))
-
     x_defects = defects == 1
     z_defects = defects == 3
 
@@ -174,11 +173,31 @@ def get_batch_of_graphs(
     x_cols = [0, 1, 3, 4, 5]
     batch_col = 2
 
-    x = torch.tensor(node_features[:, x_cols]).to(device)
-    batch_labels = torch.tensor(node_features[:, batch_col]).long().to(device)
-    pos = x[:, 2:]
+    # x: (X-detector, Z-detector, N-dist, W-dist, time-dist)
+    x = torch.tensor(node_features[:, x_cols])
+    
+    # add virtual nodes (FOR NOW: ADD VIRTUAL NODE IN THE MIDDLE OF THE GRAPH)
+    label = {"z": 3, "x": 1}
+    even_odd = np.count_nonzero(syndromes == label[experiment], axis=(1, 2, 3)) & 1
 
-    # get edge indices
+    label = {"z": 1, "x": 0}
+    virtual_nodes = torch.zeros((np.sum(even_odd), n_node_features), dtype=torch.float32)
+    virtual_nodes[:, label[experiment]] = 1
+    virtual_nodes[:, 2:4] = (code_distance + 1) / 2
+    virtual_nodes[:, -1] = syndromes.shape[-1] / 2
+    
+    x = torch.cat((x, virtual_nodes), axis=0).to(device)
+    
+    batch_labels = torch.tensor(node_features[:, batch_col]).long()
+    virtual_node_labels = (torch.arange(0, syndromes.shape[0])[even_odd.astype(bool)]).long()
+    batch_labels = torch.cat((batch_labels, virtual_node_labels), axis=0).to(device)
+    
+    # not sure if batch labels needs to be sorted (maybe remove if slow)
+    batch_labels, sort_indx = torch.sort(batch_labels)
+    x = x[sort_indx, :]
+
+    pos = x[:, 2:]
+    # get edge indices 
     if m_nearest_nodes:
         edge_index = knn_graph(pos, m_nearest_nodes, batch=batch_labels)
     else:
@@ -204,8 +223,11 @@ def get_batch_of_graphs(
     # cast eq_class to float32
     eq_class = eq_class.type(dtype=torch.float32)
     edge_attr = torch.stack((dist**power, eq_class), dim=1)
-
-    return x, edge_index, edge_attr, batch_labels
+    
+    # return indicator labelling nodes belonging to experiment (X or Z-nodes)
+    detector_labels = x[:, label[experiment]] == 1
+    
+    return x, edge_index, edge_attr, batch_labels, detector_labels
 
 def extract_graphs(x, edges, edge_attr, batch_labels):
 
@@ -236,14 +258,44 @@ def extract_graphs(x, edges, edge_attr, batch_labels):
         weights_per_syndrome.append(new_weights)
         classes_per_syndrome.append(new_edge_classes)
 
-        # map edges per graph to their original index in the edges array
-        # detector_edges = [(detectors[tuple(x[edge[0], 2:].numpy())], detectors[tuple(x[edge[1], 2:].numpy())]) for edge in new_edges.T]
-
         edge_range = torch.arange(0, edges.shape[1])
         edge_indx.append(edge_range[edge_mask[0, :]])
 
     return (
         nodes_per_syndrome,
+        edges_per_syndrome,
+        weights_per_syndrome,
+        classes_per_syndrome,
+        edge_indx,
+    )
+    
+def extract_edges(edges, edge_attr, batch_labels, node_range):
+
+    edges_per_syndrome = []
+    weights_per_syndrome = []
+    classes_per_syndrome = []
+    edge_indx = []
+    edge_weights = edge_attr[:, 0]
+    edge_classes = edge_attr[:, 1]
+    for i in range(batch_labels[-1].item() + 1):
+        ind_range = torch.nonzero(batch_labels == i)
+
+        edge_mask = (edges >= node_range[ind_range[0]]) & (
+            edges <= node_range[ind_range[-1]]
+        )
+        # new_edges = edges[:, edge_mask[0, :]] - node_range[ind_range[0]]
+        new_edges = edges[:, edge_mask[0, :]]
+        new_weights = edge_weights[edge_mask[0, :]]
+        new_edge_classes = edge_classes[edge_mask[0, :]]
+
+        edges_per_syndrome.append(new_edges)
+        weights_per_syndrome.append(new_weights)
+        classes_per_syndrome.append(new_edge_classes)
+
+        edge_range = torch.arange(0, edges.shape[1])
+        edge_indx.append(edge_range[edge_mask[0, :]])
+
+    return (
         edges_per_syndrome,
         weights_per_syndrome,
         classes_per_syndrome,

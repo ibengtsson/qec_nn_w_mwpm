@@ -7,6 +7,7 @@ import numpy as np
 import pymatching as pm
 import matplotlib.pyplot as plt
 from qecsim.graphtools import mwpm
+import operator
 
 import sys
 
@@ -131,7 +132,6 @@ class MWPMLoss(torch.autograd.Function):
         preds = np.array(preds)
 
         # compute accuracy
-        # n_correct = np.sum(np.any(preds == labels, axis=1))
         n_correct = (preds == labels).sum()
         accuracy = n_correct / labels.shape[0]
         loss = 1 - accuracy
@@ -149,7 +149,6 @@ class MWPMLoss(torch.autograd.Function):
         grad_output,
     ):
         preds, grad_help = ctx.saved_tensors
-        print(preds.shape, grad_help.shape)
         gradients = (grad_help[:, 0] - grad_help[:, 1])[:, None] * (preds - grad_help[:, 0][:, None])
         gradients.requires_grad = True
         return None, None, gradients, None, None, None
@@ -223,8 +222,6 @@ class TransformerGNN(nn.Module):
 
         return edges, edge_weights
 
-
-# FIX DOUBLE EDGES (node i -> j and j -> i are both included)
 def extract_graphs(x, edges, edge_attr, batch_labels):
 
     node_range = torch.arange(0, x.shape[0])
@@ -254,9 +251,6 @@ def extract_graphs(x, edges, edge_attr, batch_labels):
         weights_per_syndrome.append(new_weights)
         classes_per_syndrome.append(new_edge_classes)
 
-        # map edges per graph to their original index in the edges array
-        # detector_edges = [(detectors[tuple(x[edge[0], 2:].numpy())], detectors[tuple(x[edge[1], 2:].numpy())]) for edge in new_edges.T]
-
         edge_range = torch.arange(0, edges.shape[1])
         edge_indx.append(edge_range[edge_mask[0, :]])
 
@@ -268,17 +262,29 @@ def extract_graphs(x, edges, edge_attr, batch_labels):
         edge_indx,
     )
 
+class SplitSyndromes(nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        
+    def forward(self, edges, edge_attr, detector_labels):
+
+        node_range = torch.arange(0, detector_labels.shape[0])
+        node_subset = node_range[detector_labels]
+        
+        valid_labels = torch.isin(edges, node_subset).sum(dim=0) == 2
+        return edges[:, valid_labels], edge_attr[valid_labels, :]
 
 def main():
 
-    reps = 1
-    code_sz = 3
-    p = 5e-3
-    n_shots = 10000
+    reps = 5
+    code_sz = 5
+    p = 1e-3
+    n_shots = 1000
 
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
     syndromes, flips, _ = sim.generate_syndromes(n_shots)
-    x, edges, edge_attr, batch_labels = get_batch_of_graphs(syndromes, 20, code_sz)
+    x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, 20, code_sz)
 
     loss_fun = MWPMLoss.apply
     edge_attr.requires_grad = True

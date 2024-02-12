@@ -6,12 +6,12 @@ from scipy.spatial.distance import cdist
 import numpy as np
 import pymatching
 from qecsim.graphtools import mwpm
-from src.graph import extract_graphs
+from src.graph import extract_edges
 
 def mwpm_prediction(edges, weights, classes):
 
     # convert edges to dict
-    classes = (classes > 0.0).astype(np.int32)
+    classes = (classes > 0.5).astype(np.int32)
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
     matched_edges = mwpm(edges_w_weights)
@@ -22,7 +22,7 @@ def mwpm_prediction(edges, weights, classes):
     # REMOVE IF WHEN WE HAVE ENSURED THAT THERE IS ALWAYS AN EVEN NUMBER OF EDGES
     if matched_edges:
         classes = np.array([edges_w_classes[edge] for edge in matched_edges])
-        return classes.sum() & 1
+        return (classes.sum() + 1) & 1
     else:
         return 1
 
@@ -32,26 +32,25 @@ class MWPMLoss(torch.autograd.Function):
     @staticmethod
     def forward(
         ctx,
-        x: torch.Tensor,
         edge_indx: torch.Tensor,
         edge_attr: torch.Tensor,
         batch_labels: torch.Tensor,
+        node_range: torch.Tensor,
         labels: np.ndarray,
         factor=1.2,
     ):
 
         # split edges and edge weights per syndrome
         (
-            _,
             edges_p_graph,
             weights_p_graph,
             classes_p_graph,
             edge_map_p_graph,
-        ) = extract_graphs(
-            x,
+        ) = extract_edges(
             edge_indx,
             edge_attr,
             batch_labels,
+            node_range
         )
 
         # we must loop through every graph since each one will have given a new set of edge weights
@@ -63,9 +62,12 @@ class MWPMLoss(torch.autograd.Function):
             zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph)
         ):
 
-            edges = edges.detach().numpy()
-            weights = weights.detach().numpy()
-            classes = classes.detach().numpy()
+            # edges = edges.detach().numpy()
+            edges = edges.numpy()
+            # weights = weights.detach().numpy()
+            weights = weights.numpy()
+            # classes = classes.detach().numpy()
+            classes = classes.numpy()
 
             prediction = mwpm_prediction(edges, weights, classes)
             preds.append(prediction)
@@ -74,10 +76,14 @@ class MWPMLoss(torch.autograd.Function):
             preds_partial_de = []
             for i in range(edges.shape[1]):
                 _weights = weights
-                _weights[i] *= factor
+                # _weights[i] *= factor
+                # _weights[i] += factor
+                _weights[i] = _weights[i] + factor
 
                 _classes = classes
-                _classes[i] *= factor
+                # _classes[i] *= factor
+                # _classes[i] += factor
+                _classes[i] = _classes[i] + factor
                 pred_w = mwpm_prediction(edges, _weights, classes)
                 pred_c = mwpm_prediction(edges, weights, _classes)
                 preds_partial_de.append([pred_w, pred_c])
@@ -96,65 +102,52 @@ class MWPMLoss(torch.autograd.Function):
         # compute accuracy
         n_correct = (preds == labels).sum()
         accuracy = n_correct / labels.shape[0]
-        loss = 1 - accuracy
+        loss = torch.tensor(1 - accuracy, requires_grad=True)
+        # loss.retain_grad()
 
         ctx.save_for_backward(
+            edge_indx,
+            edge_attr,
             preds_grad,
             grad_help,
         )
-
-        return torch.tensor(loss, requires_grad=True)
+        
+        return loss
 
     @staticmethod
     def backward(
         ctx,
         grad_output,
     ):
-        preds, grad_help = ctx.saved_tensors
-        print(preds.shape, grad_help.shape)
-        gradients = (grad_help[:, 0] - grad_help[:, 1])[:, None] * (preds - grad_help[:, 0][:, None])
+        edges, edge_attr, preds, grad_help = ctx.saved_tensors
+        # gradients = (grad_help[:, 0] - grad_help[:, 1])[:, None] * (preds - grad_help[:, 0][:, None])
+        # gradients = (0.5 * (preds + grad_help[:, 0][:, None]) - grad_help[:, 1][:, None]) * (preds - grad_help[:, 0][:, None])
+        gradients = 0.5 * ((preds - grad_help[:, 1][:, None]) - torch.abs((preds - grad_help[:, 1][:, None] - 1)))
+        gradients = (preds - grad_help[:, 0][:, None] - 0.5) / 0.1
+        gradients = torch.ones_like(preds)
+        # gradients = torch.randn_like(preds)
         gradients.requires_grad = True
-        return None, None, gradients, None, None, None
-
-class EdgeNet(nn.Module):
+        # print(gradients[:100])
+        
+        return None, gradients, None, None, None, None
+    
+class SplitSyndromes(nn.Module):
     
     def __init__(self):
         super().__init__()
         
-        self.lin = nn.Linear(20, 20)
-        
-    def forward(self, x):
-        x = self.lin(x)
-        x_np = x.detach().numpy()
-        
-        with torch.no_grad():
-            out = cdist(x_np, x_np)
-        
-        y = torch.tensor(out, requires_grad=True, dtype=torch.float32)
-        return y
-    
-class MWPMLoss(torch.autograd.Function):
-    
-    @staticmethod
-    def forward(ctx, syndrome, label, decoder: pymatching.Matching):
-        
-        # possible reshape and move to numpy
-        # ...
-        
-        
-        
-        ctx.save_for_backward(syndrome, label)
-        
-        
-        
+    def forward(self, edges, edge_attr, detector_labels):
 
-class SimpleTest(nn.Module):
-    
-    def __init__(self):
-        super().__init__()
+        node_range = torch.arange(0, detector_labels.shape[0])
+        node_subset = node_range[detector_labels]
         
-    def forward(self, x):
-        pass
+        valid_labels = torch.isin(edges, node_subset).sum(dim=0) == 2
+        edges = edges[:, valid_labels]
+        edge_attr = edge_attr[valid_labels, :]
+        
+        return edges, edge_attr
+
+    
     
 
         
