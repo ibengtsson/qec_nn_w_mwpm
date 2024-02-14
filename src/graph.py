@@ -213,9 +213,9 @@ def get_batch_of_graphs(
     # compute distances to get edge attributes
     width = code_distance + 1
     if experiment == "z":
-        wrap_axis = 1
-    else:
         wrap_axis = 0
+    else:
+        wrap_axis = 1
     dist, eq_class = cylinder_distance(
         pos[edge_index[0], :], pos[edge_index[1], :], width, wrap_axis=wrap_axis
     )
