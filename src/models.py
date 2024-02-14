@@ -37,7 +37,7 @@ class MWPMLoss(torch.autograd.Function):
         batch_labels: torch.Tensor,
         node_range: torch.Tensor,
         labels: np.ndarray,
-        factor=1.2,
+        delta=0.2,
     ):
 
         # split edges and edge weights per syndrome
@@ -78,12 +78,12 @@ class MWPMLoss(torch.autograd.Function):
                 _weights = weights
                 # _weights[i] *= factor
                 # _weights[i] += factor
-                _weights[i] = _weights[i] + factor
+                _weights[i] = _weights[i] + delta
 
                 _classes = classes
                 # _classes[i] *= factor
                 # _classes[i] += factor
-                _classes[i] = _classes[i] + factor
+                _classes[i] = _classes[i] + delta
                 pred_w = mwpm_prediction(edges, _weights, classes)
                 pred_c = mwpm_prediction(edges, weights, _classes)
                 preds_partial_de.append([pred_w, pred_c])
@@ -106,11 +106,10 @@ class MWPMLoss(torch.autograd.Function):
         # loss.retain_grad()
 
         ctx.save_for_backward(
-            edge_indx,
-            edge_attr,
             preds_grad,
             grad_help,
         )
+        ctx.delta = delta
         
         return loss
 
@@ -119,14 +118,25 @@ class MWPMLoss(torch.autograd.Function):
         ctx,
         grad_output,
     ):
-        edges, edge_attr, preds, grad_help = ctx.saved_tensors
-        # gradients = (grad_help[:, 0] - grad_help[:, 1])[:, None] * (preds - grad_help[:, 0][:, None])
-        # gradients = (0.5 * (preds + grad_help[:, 0][:, None]) - grad_help[:, 1][:, None]) * (preds - grad_help[:, 0][:, None])
-        gradients = 0.5 * ((preds - grad_help[:, 1][:, None]) - torch.abs((preds - grad_help[:, 1][:, None] - 1)))
-        # gradients = (preds - grad_help[:, 0][:, None] - 0.5) / 0.1
+        shift_preds, grad_help = ctx.saved_tensors
+        preds = grad_help[:, 0][:, None]
+        labels = grad_help[:, 1][:, None]
+        delta = ctx.delta
+        # gradients = (preds - labels) * (shift_preds - preds) / delta
+        gradients = (0.5 * (shift_preds + preds) - labels) * (shift_preds - preds) / delta
+        # gradients = 0.5 * ((preds - grad_help[:, 1][:, None]) - torch.abs((preds - grad_help[:, 1][:, None] - 1)))
+        # gradients = (preds - grad_help[:, 0][:, None] - 0.5) / delta
         # gradients = torch.ones_like(preds)
         # gradients = torch.randn_like(preds)
+        # gradients = torch.abs((preds - labels) + (shift_preds - labels) - 1)
+        
+        # gradients[gradients > 0] = 1
+        # gradients[gradients < 1] = -0.5
+        # gradients[gradients < 0] = -1
+        # gradients[gradients == 0] = 1
+        
         gradients.requires_grad = True
+        # print(gradients[:10, :])
         # print(gradients[:100])
         
         return None, gradients, None, None, None, None
