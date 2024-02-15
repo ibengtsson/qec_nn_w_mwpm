@@ -11,7 +11,7 @@ from src.graph import extract_edges
 def mwpm_prediction(edges, weights, classes):
 
     # convert edges to dict
-    classes = (classes > 0.5).astype(np.int32)
+    classes = (classes > 0).astype(np.int32)
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
     matched_edges = mwpm(edges_w_weights)
@@ -24,7 +24,7 @@ def mwpm_prediction(edges, weights, classes):
         classes = np.array([edges_w_classes[edge] for edge in matched_edges])
         return (classes.sum() + 1) & 1
     else:
-        return 1
+        return 0
 
 class MWPMLoss(torch.autograd.Function):
 
