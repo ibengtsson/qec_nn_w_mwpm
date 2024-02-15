@@ -213,7 +213,7 @@ def get_batch_of_graphs(
     virtual_nodes[:, label[experiment]] = 1
     virtual_nodes[:, 2:] = -1 #FIX
     
-    # create batch labels
+    # # create batch labels
     virtual_batch_labels = (torch.arange(0, syndromes.shape[0])[even_odd.astype(bool)]).long().to(device)
     
     # add virtual nodes to node list and extend batch labels
@@ -250,42 +250,35 @@ def get_batch_of_graphs(
     detector_labels = x[:, label[experiment]] == 1
     
     return x, edge_index, edge_attr, batch_labels, detector_labels
-    
-    
-    
-    
-    node_indices = torch.arange(0, x.shape[0])
-    
-    
-    
-    
-    nodes_per_graph = list(unbatch(node_indices,batch_labels))
-    connect_nodes = [nodes_per_graph[i] for i in virtual_node_labels]
-    list_nodes = [x.tolist() for x in connect_nodes]
-    virtual_indices = torch.arange(x.shape[0],x.shape[0]+len(virtual_node_labels))
 
-    num_new_edges = len(sum(list_nodes,[]))*2
-    virtual_edges = torch.zeros(2,num_new_edges,dtype=int)
-    count = 0
-    for i in range(0,len(virtual_indices)):
-        curr_virtual = virtual_indices[i]
-        curr_real = connect_nodes[i]
-        for j in range(0,len(curr_real)):
-            virtual_edges[0,count] = curr_virtual
-            virtual_edges[1,count] = curr_real[j]
-            virtual_edges[0,count+1] = curr_real[j]
-            virtual_edges[1,count+1] = curr_virtual
-            count += 2
+    # node_indices = torch.arange(0, x.shape[0])
+    # nodes_per_graph = list(unbatch(node_indices,batch_labels))
+    # connect_nodes = [nodes_per_graph[i] for i in virtual_batch_labels]
+    # list_nodes = [x.tolist() for x in connect_nodes]
+    # virtual_indices = torch.arange(x.shape[0],x.shape[0]+len(virtual_batch_labels))
+
+    # num_new_edges = len(sum(list_nodes,[]))*2
+    # virtual_edges = torch.zeros(2,num_new_edges,dtype=int)
+    # count = 0
+    # for i in range(0,len(virtual_indices)):
+    #     curr_virtual = virtual_indices[i]
+    #     curr_real = connect_nodes[i]
+    #     for j in range(0,len(curr_real)):
+    #         virtual_edges[0,count] = curr_virtual
+    #         virtual_edges[1,count] = curr_real[j]
+    #         virtual_edges[0,count+1] = curr_real[j]
+    #         virtual_edges[1,count+1] = curr_virtual
+    #         count += 2
                 
-    #print(virtual_node_graph_nodes)
-    x = torch.cat((x, virtual_nodes), axis=0).to(device)
-    edge_index = torch.cat((edge_index, virtual_edges), axis=1).to(device)
-    virtual_attr = torch.ones((virtual_edges.shape[1],2),dtype=torch.float32)
-    edge_attr = torch.cat((edge_attr, virtual_attr), axis=0).to(device)
-    # return indicator labelling nodes belonging to experiment (X or Z-nodes)
-    detector_labels = x[:, label[experiment]] == 1
+    # #print(virtual_node_graph_nodes)
+    # x = torch.cat((x, virtual_nodes), axis=0).to(device)
+    # edge_index = torch.cat((edge_index, virtual_edges), axis=1).to(device)
+    # virtual_attr = torch.ones((virtual_edges.shape[1],2),dtype=torch.float32)
+    # edge_attr = torch.cat((edge_attr, virtual_attr), axis=0).to(device)
+    # # return indicator labelling nodes belonging to experiment (X or Z-nodes)
+    # detector_labels = x[:, label[experiment]] == 1
     
-    return x, edge_index, edge_attr, batch_labels, detector_labels
+    # return x, edge_index, edge_attr, batch_labels, detector_labels
 
 def extract_graphs(x, edges, edge_attr, batch_labels):
 
