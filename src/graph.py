@@ -143,12 +143,26 @@ def cylinder_distance(x, y, width, wrap_axis=1, manhattan=False):
         return torch.sqrt((ds**2).sum(axis=1)), eq_class
     else:
         return ds.sum(axis=1), eq_class
+    
+def inside_distance(x, y, manhattan=False):
+    ds = x - y
+    if not manhattan:
+        return torch.sqrt((ds**2).sum(axis=1))
+    else:
+        return ds.sum(axis=1)
+    
+def outside_distance(x, y, width, wrap_axis=1, manhattan=False):
+    ds = torch.abs(x - y)
+    ds[:, wrap_axis] = width - ds[:, wrap_axis]
+    if not manhattan:
+        return torch.sqrt((ds**2).sum(axis=1))
+    else:
+        return ds.sum(axis=1)
 
 
 def get_batch_of_graphs(
     syndromes,
     m_nearest_nodes,
-    code_distance,
     experiment="z",
     n_node_features=5,
     power=2.0,
@@ -176,10 +190,9 @@ def get_batch_of_graphs(
     x = torch.tensor(node_features[:, x_cols]).to(device)
     batch_labels = torch.tensor(node_features[:, batch_col]).long().to(device)
 
-    pos = x[:, 2:]
     # get edge indices 
     if m_nearest_nodes:
-        edge_index = knn_graph(pos, m_nearest_nodes, batch=batch_labels)
+        edge_index = knn_graph(x[:, 2:], m_nearest_nodes, batch=batch_labels)
 
     else:
         n = x.shape[0]
@@ -191,19 +204,19 @@ def get_batch_of_graphs(
             axis=1,
         )
 
-    # compute distances to get edge attributes
-    width = code_distance + 1
-    if experiment == "z":
-        wrap_axis = 0
-    else:
-        wrap_axis = 1
-    dist, eq_class = cylinder_distance(
-        pos[edge_index[0], :], pos[edge_index[1], :], width, wrap_axis=wrap_axis
-    )
+    # # compute distances to get edge attributes
+    # width = code_distance + 1
+    # if experiment == "z":
+    #     wrap_axis = 0
+    # else:
+    #     wrap_axis = 1
+    # dist, eq_class = cylinder_distance(
+    #     pos[edge_index[0], :], pos[edge_index[1], :], width, wrap_axis=wrap_axis
+    # )
 
-    # cast eq_class to float32
-    eq_class = eq_class.type(dtype=torch.float32)
-    edge_attr = torch.stack((dist**power, eq_class), dim=1)
+    # # cast eq_class to float32
+    # eq_class = eq_class.type(dtype=torch.float32)
+    # edge_attr = torch.stack((dist**power, eq_class), dim=1)
 
     # create virtual nodes for the graphs with odd number of nodes (counted per Z/X-class)
     label = {"z": 3, "x": 1}
@@ -239,12 +252,22 @@ def get_batch_of_graphs(
     # append to existing indices
     edge_index = torch.cat([edge_index, new_edges], dim=1)
     
-    # extend edge attributes
-    new_edge_attr = torch.ones_like(new_edges.T)
-    new_edge_attr[:, 0] = 1
-    new_edge_attr[:, 1] = -1
+    # compute edge attributes (we'll have one edge for inner-distance and one for outer-distance)
+    wrap_axis = {"x": 1, "z": 0}
+    in_dist = inside_distance(x[edge_index[0, :], 2:], x[edge_index[1, :], 2:])
+    out_dist = outside_distance(x[edge_index[0, :], 2:], x[edge_index[1, :], 2:], syndromes.shape[1], wrap_axis[experiment])
+    dist = torch.cat([in_dist, out_dist], dim=0)
     
-    edge_attr = torch.cat([edge_attr, new_edge_attr], dim=0)
+    # mark inner distance +1 and outer -1 
+    in_mark = torch.ones_like(in_dist)
+    out_mark = -1 * torch.ones_like(out_dist)
+    mark = torch.cat([in_mark, out_mark], dim=0)
+    
+    # stack distance and marks together
+    edge_attr = torch.stack([dist, mark], dim=1)
+    
+    # want to have two un-directed edges per node pair e.g. (1-0, 0-1, 1-0, 0-1), so let's double edge_index
+    edge_index = torch.cat([edge_index, edge_index], dim=1)
     
     # mark which detectors that are of type experiment
     detector_labels = x[:, label[experiment]] == 1
