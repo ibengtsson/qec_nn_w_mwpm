@@ -8,12 +8,14 @@ import pymatching as pm
 import matplotlib.pyplot as plt
 from qecsim.graphtools import mwpm
 import operator
+from torch_geometric.utils import coalesce, is_undirected, sort_edge_index
 
 import sys
 
 sys.path.append("../")
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
+from src.utils import time_it
 
 
 def mwpm_prediction(edges, weights, classes):
@@ -280,12 +282,14 @@ def main():
     reps = 5
     code_sz = 5
     p = 1e-3
-    n_shots = 1000
+    n_shots = 10000
 
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
     syndromes, flips, _ = sim.generate_syndromes(n_shots)
     x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, 20, code_sz)
+    time_it(get_batch_of_graphs, 100, syndromes, 20, code_sz)
 
+    return 
     loss_fun = MWPMLoss.apply
     edge_attr.requires_grad = True
     loss = loss_fun(
