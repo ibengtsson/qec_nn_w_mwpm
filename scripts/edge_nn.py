@@ -63,7 +63,7 @@ class GraphNN(nn.Module):
         self.gc = nng.GraphConv(5, 16)
         self.split_syndromes = SplitSyndromes()
         
-        self.lin = nn.Linear(34, 2)
+        self.lin = nn.Linear(33, 1)
         self.sigmoid = nn.Sigmoid()
         
     def forward(self, x, edges, edge_attr, detector_labels):
@@ -72,21 +72,22 @@ class GraphNN(nn.Module):
         
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
-        edge_feat = torch.cat([x_src, edge_attr, x_dst], dim=-1)
+        edge_feat = torch.cat([x_src, edge_attr[:, 0][:, None], x_dst], dim=-1)
         edge_feat = self.lin(edge_feat)
         edge_feat = self.sigmoid(edge_feat)
-        return edges, edge_feat
+        
+        return edges, torch.cat([edge_feat, edge_attr[:, 1][:, None]], dim=1)
     
 def main():
     
     reps = 3
     code_sz = 3
     p = 1e-3
-    n_shots = 100
+    n_shots = 1000
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots, seed=1)
-    n_epochs = 40
+    n_epochs = 10
     n_batches = 4
-    factor = 0.3
+    factor = 0.5
     
     model = GraphNN()
     model.train()
@@ -103,19 +104,20 @@ def main():
         for _ in range(n_batches):
             optim.zero_grad()
             syndromes, flips, n_trivial = sim.generate_syndromes(n_shots)
-            x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, 10, code_sz)
+            x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, 10)
+            # print(x.shape, edges.shape, edge_attr.shape, batch_labels.shape, detector_labels.shape)
 
             edges, edge_feat = model(x, edges, edge_attr, detector_labels)
             
             node_range = torch.arange(0, x.shape[0])
             loss = loss_fun(
-            edges,
-            edge_feat,
-            batch_labels,
-            node_range,
-            np.array(flips) * 1,
-            factor
-            )
+                edges,
+                edge_feat,
+                batch_labels,
+                node_range,
+                np.array(flips) * 1,
+                factor
+                )
     
             loss.backward()
             optim.step()
