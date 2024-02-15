@@ -74,16 +74,16 @@ class MWPMLoss(torch.autograd.Function):
 
             # we need a workaround for gradient computations
             preds_partial_de = []
-            for i in range(edges.shape[1]):
+            for j in range(edges.shape[1]):
                 _weights = weights
-                # _weights[i] *= factor
-                # _weights[i] += factor
-                _weights[i] = _weights[i] + delta
+                # _weights[j] *= factor
+                # _weights[j] += factor
+                _weights[j] = _weights[j] + delta
 
                 _classes = classes
-                # _classes[i] *= factor
-                # _classes[i] += factor
-                _classes[i] = _classes[i] + delta
+                # _classes[j] *= factor
+                # _classes[j] += factor
+                _classes[j] = _classes[j] + delta
                 pred_w = mwpm_prediction(edges, _weights, classes)
                 pred_c = mwpm_prediction(edges, weights, _classes)
                 preds_partial_de.append([pred_w, pred_c])
