@@ -221,36 +221,44 @@ def get_batch_of_graphs(
     # create virtual nodes for the graphs with odd number of nodes (counted per Z/X-class)
     label = {"z": 3, "x": 1}
     even_odd = np.count_nonzero(syndromes == label[experiment], axis=(1, 2, 3)) & 1
-    virtual_nodes = torch.zeros((np.sum(even_odd), n_node_features), dtype=torch.float32).to(device)
-    label = {"z": 1, "x": 0}
-    virtual_nodes[:, label[experiment]] = 1
-    virtual_nodes[:, 2:] = -1 #FIX
-    
-    # # create batch labels
-    virtual_batch_labels = (torch.arange(0, syndromes.shape[0])[even_odd.astype(bool)]).long().to(device)
-    
-    # add virtual nodes to node list and extend batch labels
-    n_nodes_before = x.shape[0]
-    x = torch.cat((x, virtual_nodes), axis=0)
-    batch_labels = torch.cat((batch_labels, virtual_batch_labels), axis=0)
-    n_nodes_after = x.shape[0]
+    if even_odd.sum() > 0:
+        virtual_nodes = torch.zeros((np.sum(even_odd), n_node_features), dtype=torch.float32).to(device)
+        label = {"z": 1, "x": 0}
+        virtual_nodes[:, label[experiment]] = 1
+        virtual_nodes[:, 2:] = -1 #FIX
+        
+        # # create batch labels
+        virtual_batch_labels = (torch.arange(0, syndromes.shape[0])[even_odd.astype(bool)]).long().to(device)
+        
+        # add virtual nodes to node list and extend batch labels
+        n_nodes_before = x.shape[0]
+        x = torch.cat((x, virtual_nodes), axis=0)
+        batch_labels = torch.cat((batch_labels, virtual_batch_labels), axis=0)
+        n_nodes_after = x.shape[0]
+        print(f"{n_nodes_before=}")
     
     # do we need to sort? Will fuck up edge indices!
     # batch_labels, sort_indx = torch.sort(batch_labels)
     # x = x[sort_indx, :]
-    
-    # extend edge indices
-    cum_node_sum = np.cumsum(np.count_nonzero(syndromes, axis=(1, 2, 3)))
-    cum_node_sum = np.append(cum_node_sum, 0)
-    
-    ranges = [torch.arange(start, end) for start, end in zip(cum_node_sum[virtual_batch_labels - 1], cum_node_sum[virtual_batch_labels])]
-    numbering = torch.arange(n_nodes_before, n_nodes_after)
-    
-    new_edges = torch.cat([torch.stack([target, torch.ones(target.shape, dtype=torch.int64) * num], dim=0) for target, num in zip(ranges, numbering)], dim=1).to(device)
-    new_edges = torch.cat([new_edges, torch.flipud(new_edges)], dim=1)
-    
-    # append to existing indices
-    edge_index = torch.cat([edge_index, new_edges], dim=1)
+        
+        # extend edge indices
+        cum_node_sum = np.cumsum(np.count_nonzero(syndromes, axis=(1, 2, 3)))
+        cum_node_sum = np.append(cum_node_sum, 0)
+
+        starts = cum_node_sum[virtual_batch_labels - 1]
+        ends = cum_node_sum[virtual_batch_labels]
+
+        if isinstance(starts, np.ndarray):
+            ranges = [torch.arange(start, end) for start, end in zip(starts, ends)]
+        else:
+            ranges = [torch.arange(starts, ends)]
+        numbering = torch.arange(n_nodes_before, n_nodes_after)
+
+        new_edges = torch.cat([torch.stack([target, torch.ones(target.shape, dtype=torch.int64) * num], dim=0) for target, num in zip(ranges, numbering)], dim=1).to(device)
+        new_edges = torch.cat([new_edges, torch.flipud(new_edges)], dim=1)
+        
+        # append to existing indices
+        edge_index = torch.cat([edge_index, new_edges], dim=1)
     
     # compute edge attributes (we'll have one edge for inner-distance and one for outer-distance)
     wrap_axis = {"x": 1, "z": 0}
@@ -265,7 +273,7 @@ def get_batch_of_graphs(
     
     # stack distance and marks together
     edge_attr = torch.stack([dist, mark], dim=1)
-    
+
     # want to have two un-directed edges per node pair e.g. (1-0, 0-1, 1-0, 0-1), so let's double edge_index
     edge_index = torch.cat([edge_index, edge_index], dim=1)
     
@@ -351,7 +359,8 @@ def extract_edges(edges, edge_attr, batch_labels, node_range):
     edge_indx = []
     edge_weights = edge_attr[:, 0]
     edge_classes = edge_attr[:, 1]
-    for i in range(batch_labels[-1].item() + 1):
+    n = torch.unique(batch_labels).shape[0]
+    for i in range(n):
         ind_range = torch.nonzero(batch_labels == i)
 
         edge_mask = (edges >= node_range[ind_range[0]]) & (
@@ -368,7 +377,7 @@ def extract_edges(edges, edge_attr, batch_labels, node_range):
 
         edge_range = torch.arange(0, edges.shape[1])
         edge_indx.append(edge_range[edge_mask[0, :]])
-
+        print(new_edges)
     return (
         edges_per_syndrome,
         weights_per_syndrome,
