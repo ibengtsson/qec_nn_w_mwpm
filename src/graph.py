@@ -173,16 +173,8 @@ def get_batch_of_graphs(
     batch_col = 2
 
     # x: (X-detector, Z-detector, N-dist, W-dist, time-dist)
-    x = torch.tensor(node_features[:, x_cols])
-    # add virtual nodes (FOR NOW: ADD VIRTUAL NODE IN THE MIDDLE OF THE GRAPH)
-    label = {"z": 3, "x": 1}
-    even_odd = np.count_nonzero(syndromes == label[experiment], axis=(1, 2, 3)) & 1
-    label = {"z": 1, "x": 0}    
-    batch_labels = torch.tensor(node_features[:, batch_col]).long()
-    
-    # not sure if batch labels needs to be sorted (maybe remove if slow)
-    #batch_labels, sort_indx = torch.sort(batch_labels)
-    #x = x[sort_indx, :]
+    x = torch.tensor(node_features[:, x_cols]).to(device)
+    batch_labels = torch.tensor(node_features[:, batch_col]).long().to(device)
 
     pos = x[:, 2:]
     # get edge indices 
@@ -213,14 +205,61 @@ def get_batch_of_graphs(
     eq_class = eq_class.type(dtype=torch.float32)
     edge_attr = torch.stack((dist**power, eq_class), dim=1)
 
-    # adding virtual nodes and edges to each graph with an odd number of nodes
-    virtual_nodes = torch.zeros((np.sum(even_odd), n_node_features), dtype=torch.float32)
+    # create virtual nodes for the graphs with odd number of nodes (counted per Z/X-class)
+    label = {"z": 3, "x": 1}
+    even_odd = np.count_nonzero(syndromes == label[experiment], axis=(1, 2, 3)) & 1
+    virtual_nodes = torch.zeros((np.sum(even_odd), n_node_features), dtype=torch.float32).to(device)
+    label = {"z": 1, "x": 0}
     virtual_nodes[:, label[experiment]] = 1
-    virtual_nodes[:,2:4] = -1
-    virtual_node_labels = (torch.arange(0, syndromes.shape[0])[even_odd.astype(bool)]).long()
-    node_indices = torch.arange(0,x.shape[0])
-    nodes_per_graph = list(unbatch(node_indices,batch_labels))
+    virtual_nodes[:, 2:] = -1 #FIX
     
+    # create batch labels
+    virtual_batch_labels = (torch.arange(0, syndromes.shape[0])[even_odd.astype(bool)]).long().to(device)
+    
+    # add virtual nodes to node list and extend batch labels
+    n_nodes_before = x.shape[0]
+    x = torch.cat((x, virtual_nodes), axis=0)
+    batch_labels = torch.cat((batch_labels, virtual_batch_labels), axis=0)
+    n_nodes_after = x.shape[0]
+    
+    # do we need to sort? Will fuck up edge indices!
+    # batch_labels, sort_indx = torch.sort(batch_labels)
+    # x = x[sort_indx, :]
+    
+    # extend edge indices
+    cum_node_sum = np.cumsum(np.count_nonzero(syndromes, axis=(1, 2, 3)))
+    cum_node_sum = np.append(cum_node_sum, 0)
+    
+    ranges = [torch.arange(start, end) for start, end in zip(cum_node_sum[virtual_batch_labels - 1], cum_node_sum[virtual_batch_labels])]
+    numbering = torch.arange(n_nodes_before, n_nodes_after)
+    
+    new_edges = torch.cat([torch.stack([target, torch.ones(target.shape, dtype=torch.int64) * num], dim=0) for target, num in zip(ranges, numbering)], dim=1).to(device)
+    new_edges = torch.cat([new_edges, torch.flipud(new_edges)], dim=1)
+    
+    # append to existing indices
+    edge_index = torch.cat([edge_index, new_edges], dim=1)
+    
+    # extend edge attributes
+    new_edge_attr = torch.ones_like(new_edges.T)
+    new_edge_attr[:, 0] = 1
+    new_edge_attr[:, 1] = -1
+    
+    edge_attr = torch.cat([edge_attr, new_edge_attr], dim=0)
+    
+    # mark which detectors that are of type experiment
+    detector_labels = x[:, label[experiment]] == 1
+    
+    return x, edge_index, edge_attr, batch_labels, detector_labels
+    
+    
+    
+    
+    node_indices = torch.arange(0, x.shape[0])
+    
+    
+    
+    
+    nodes_per_graph = list(unbatch(node_indices,batch_labels))
     connect_nodes = [nodes_per_graph[i] for i in virtual_node_labels]
     list_nodes = [x.tolist() for x in connect_nodes]
     virtual_indices = torch.arange(x.shape[0],x.shape[0]+len(virtual_node_labels))
