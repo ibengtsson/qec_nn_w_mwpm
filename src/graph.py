@@ -266,9 +266,9 @@ def get_batch_of_graphs(
     out_dist = outside_distance(x[edge_index[0, :], 2:], x[edge_index[1, :], 2:], syndromes.shape[1], wrap_axis[experiment])
     dist = torch.cat([in_dist, out_dist], dim=0)
     
-    # mark inner distance +1 and outer -1 
-    in_mark = torch.ones_like(in_dist)
-    out_mark = -1 * torch.ones_like(out_dist)
+    # mark inner distance -1 and outer +1 
+    in_mark = -1 * torch.ones_like(in_dist)
+    out_mark = torch.ones_like(out_dist)
     mark = torch.cat([in_mark, out_mark], dim=0)
     
     # stack distance and marks together
