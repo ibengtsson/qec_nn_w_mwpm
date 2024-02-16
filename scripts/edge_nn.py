@@ -80,7 +80,7 @@ class GraphNN(nn.Module):
         n_edges = edge_feat.shape[0]
         edge_feat = edge_feat.reshape(-1,  n_edges // 2)
         edge_classes = edge_attr[:, 1].reshape(-1, n_edges // 2)
-        max_inds = torch.argmax(edge_feat, dim=0)
+        max_inds = torch.argmin(edge_feat, dim=0)
 
         edge_feat = edge_feat[max_inds, range(n_edges // 2)]
         edge_classes = edge_classes[max_inds, range(n_edges // 2)]
