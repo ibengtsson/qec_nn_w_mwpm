@@ -134,7 +134,7 @@ class MWPMLoss(torch.autograd.Function):
         # gradients[gradients < 1] = -0.5
         # gradients[gradients < 0] = -1
         # gradients[gradients == 0] = 1
-        
+        print(f"{torch.count_nonzero(gradients)=}")
         gradients.requires_grad = True
         # print(gradients[:10, :])
         # print(gradients[:100])
