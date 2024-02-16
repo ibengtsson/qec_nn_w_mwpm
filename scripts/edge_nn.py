@@ -67,6 +67,7 @@ class GraphNN(nn.Module):
         self.sigmoid = nn.Sigmoid()
         
     def forward(self, x, edges, edge_attr, detector_labels):
+
         x = self.gc(x, edges, edge_attr[:, 1])
         x = torch.nn.functional.relu(x, inplace=True)
         
@@ -74,19 +75,29 @@ class GraphNN(nn.Module):
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
         edge_feat = torch.cat([x_src, edge_attr[:, 0][:, None], x_dst], dim=-1)
         edge_feat = self.lin(edge_feat)
-        edge_feat = self.sigmoid(edge_feat)
         
-        return edges, torch.cat([edge_feat, edge_attr[:, 1][:, None]], dim=1)
+        # save edges with largest weights
+        n_edges = edge_feat.shape[0]
+        edge_feat = edge_feat.reshape(-1,  n_edges // 2)
+        edge_classes = edge_attr[:, 1].reshape(-1, n_edges // 2)
+        max_inds = torch.argmax(edge_feat, dim=0)
+
+        edge_feat = edge_feat[max_inds, range(n_edges // 2)]
+        edge_classes = edge_classes[max_inds, range(n_edges // 2)]
+        
+        edges = edges[:, :n_edges // 2]
+
+        return edges, torch.stack([edge_feat, edge_classes], dim=1)
     
 def main():
     
     reps = 3
     code_sz = 3
     p = 1e-3
-    n_shots = 1000
+    n_shots = 5000
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots, seed=1)
     n_epochs = 10
-    n_batches = 4
+    n_batches = 1
     factor = 0.5
     
     model = GraphNN()
@@ -98,15 +109,16 @@ def main():
     for epoch in range(n_epochs):
         train_loss = 0
         epoch_n_graphs = 0
-        # print(list(model.parameters())[0].grad)
-        # print(list(model.parameters())[-2].grad)
-        # print(list(model.parameters())[-1].grad)
+        
+        if epoch > 0:
+            params = list(model.parameters())
+            for i, p in enumerate(params):
+                print(f"Parameter {i}: {torch.count_nonzero(p.grad).item()} non-zero gradients.")
+
         for _ in range(n_batches):
             optim.zero_grad()
             syndromes, flips, n_trivial = sim.generate_syndromes(n_shots)
             x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, 10)
-            # print(x.shape, edges.shape, edge_attr.shape, batch_labels.shape, detector_labels.shape)
-
             edges, edge_feat = model(x, edges, edge_attr, detector_labels)
             
             node_range = torch.arange(0, x.shape[0])
