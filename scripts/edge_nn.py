@@ -94,10 +94,10 @@ def main():
     reps = 3
     code_sz = 3
     p = 1e-3
-    n_shots = 5000
-    sim = SurfaceCodeSim(reps, code_sz, p, n_shots, seed=1)
+    n_shots = 8000
+    sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
     n_epochs = 10
-    n_batches = 1
+    n_batches = 5
     factor = 0.5
     
     model = GraphNN()
