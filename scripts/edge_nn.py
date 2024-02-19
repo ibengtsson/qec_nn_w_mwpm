@@ -69,7 +69,7 @@ class GraphNN(nn.Module):
     def forward(self, x, edges, edge_attr, detector_labels):
 
         x = self.gc(x, edges, edge_attr[:, 1])
-        x = torch.nn.functional.relu(x, inplace=True)
+        x = torch.nn.functional.tanh(x)
         
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
@@ -87,25 +87,30 @@ class GraphNN(nn.Module):
         
         edges = edges[:, :n_edges // 2]
 
-        return edges, torch.stack([edge_feat, edge_classes], dim=1)
+        # edge_feat = self.sigmoid(edge_feat)
+        return edges, edge_feat, edge_classes
     
 def main():
     
-    reps = 3
-    code_sz = 3
+    reps = 5
+    code_sz = 5
     p = 1e-3
-    n_shots = 8000
+    n_shots = 1000
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
     n_epochs = 10
-    n_batches = 5
-    factor = 0.5
+    n_batches = 10
+    factor = 1.5
+    # factor = 3
     
+    # set seed (for nn, not simulations)
+    torch.manual_seed(111)
     model = GraphNN()
     model.train()
-    # loss_fun = nn.MSELoss()
     loss_fun = MWPMLoss.apply
+    
     optim = torch.optim.SGD(model.parameters(), lr=0.001)
     
+    train_losses = []
     for epoch in range(n_epochs):
         train_loss = 0
         epoch_n_graphs = 0
@@ -118,16 +123,14 @@ def main():
         for _ in range(n_batches):
             optim.zero_grad()
             syndromes, flips, n_trivial = sim.generate_syndromes(n_shots)
-            x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, 10)
-            edges, edge_feat = model(x, edges, edge_attr, detector_labels)
-            
-            node_range = torch.arange(0, x.shape[0])
+            x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, m_nearest_nodes=20)
+            edges, edge_weights, edge_classes = model(x, edges, edge_attr, detector_labels)
             loss = loss_fun(
                 edges,
-                edge_feat,
+                edge_weights,
+                edge_classes,
                 batch_labels,
-                node_range,
-                np.array(flips) * 1,
+                flips,
                 factor
                 )
     
@@ -138,7 +141,7 @@ def main():
             epoch_n_graphs += n_graphs
         train_loss /= epoch_n_graphs
     
-        print(train_loss)
-
+        train_losses.append(train_loss)
+    print(train_losses)
 if __name__ == "__main__":
     main()
