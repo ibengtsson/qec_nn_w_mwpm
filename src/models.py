@@ -56,49 +56,34 @@ class MWPMLoss(torch.autograd.Function):
 
         # we must loop through every graph since each one will have given a new set of edge weights
         preds = []
-        preds_grad = torch.zeros_like(edge_attr)
+        grad_data = torch.zeros_like(edge_attr)
         grad_help = torch.zeros_like(edge_attr)
 
         for i, (edges, weights, classes, edge_map) in enumerate(
             zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph)
         ):
-            # print(edges)
-            # edges = edges.detach().numpy()
             edges = edges.numpy()
-            # weights = weights.detach().numpy()
             weights = weights.numpy()
-            # classes = classes.detach().numpy()
             classes = classes.numpy()
 
             prediction = mwpm_prediction(edges, weights, classes)
-            # print(f"{prediction=}")
             preds.append(prediction)
 
             # we need a workaround for gradient computations
             preds_partial_de = []
             for j in range(edges.shape[1]):
                 _weights = weights.copy()
-                # _weights[j] *= factor
-                # _weights[j] += factor
-                # _weights[j] = _weights[j] + delta
+                
                 _weights[j] = _weights[j] * factor
                 delta = _weights[j] - weights[j]
-   
-                # _classes = classes
-                # _classes[j] *= factor
-                # _classes[j] += factor
-                # _classes[j] = _classes[j] + delta
                 pred_w = mwpm_prediction(edges, _weights, classes)
-                # print(f"{pred_w=}")
-                # pred_c = mwpm_prediction(edges, weights, _classes)
-                # preds_partial_de.append(pred_w)
                 preds_partial_de.append([pred_w, delta])
                 
             # REMOVE WHEN WE KNOW THAT ALL SYNDROMES HAVE AN EDGE
             if edge_map.numel() == 0:
                 continue
             else:
-                preds_grad[edge_map, :] = torch.tensor(
+                grad_data[edge_map, :] = torch.tensor(
                     preds_partial_de, dtype=torch.float32
                 )
                 grad_help[edge_map, 0] = prediction
@@ -109,13 +94,11 @@ class MWPMLoss(torch.autograd.Function):
         n_correct = (preds == labels).sum()
         accuracy = n_correct / labels.shape[0]
         loss = torch.tensor(1 - accuracy, requires_grad=True)
-        # loss.retain_grad()
 
         ctx.save_for_backward(
-            preds_grad,
+            grad_data,
             grad_help,
         )
-        # ctx.delta = delta
         
         return loss
 
@@ -124,30 +107,17 @@ class MWPMLoss(torch.autograd.Function):
         ctx,
         grad_output,
     ):
-        shift_preds, grad_help = ctx.saved_tensors
-        delta = shift_preds[:, 1]
-        shift_preds = shift_preds[:, 0]
+        grad_data, grad_help = ctx.saved_tensors
+        shift_preds = grad_data[:, 0]
+        delta = grad_data[:, 1]
         
         preds = grad_help[:, 0]
         labels = grad_help[:, 1]
-        # delta = ctx.delta
-        # gradients = (preds - labels) * (shift_preds - preds) / delta
+
         gradients = (0.5 * (shift_preds + preds) - labels) * (shift_preds - preds) / delta
-        # gradients = 0.5 * ((preds - grad_help[:, 1][:, None]) - torch.abs((preds - grad_help[:, 1][:, None] - 1)))
-        # gradients = (preds - grad_help[:, 0][:, None] - 0.5) / delta
-        # gradients = torch.ones_like(preds)
-        # gradients = torch.randn_like(preds)
-        # gradients = torch.abs((preds - labels) + (shift_preds - labels) - 1)
-        
-        # gradients[gradients > 0] = 1
-        # gradients[gradients < 1] = -0.5
-        # gradients[gradients < 0] = -1
-        # gradients[gradients == 0] = 1
-        print(f"{torch.count_nonzero(gradients)=}")
+
         gradients.requires_grad = True
-        # print(gradients[:10, :])
-        # print(gradients[:100])
-        
+
         return None, gradients, None, None, None, None, None
     
 class SplitSyndromes(nn.Module):
@@ -167,7 +137,39 @@ class SplitSyndromes(nn.Module):
         return edges, edge_attr
 
 class GraphNN(nn.Module):
-    pass
+    
+    def __init__(self):
+        super().__init__()
+        self.gc = nng.GraphConv(5, 16)
+        self.split_syndromes = SplitSyndromes()
+        
+        self.lin1 = nn.Linear(33, 16)
+        self.lin2 = nn.Linear(16, 1)
+        
+    def forward(self, x, edges, edge_attr, detector_labels):
+
+        x = self.gc(x, edges, edge_attr[:, 0] * edge_attr[:, 1])
+        x = torch.nn.functional.tanh(x)
+        
+        edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
+        x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
+        edge_feat = torch.cat([x_src, edge_attr[:, 0][:, None], x_dst], dim=-1)
+        edge_feat = self.lin1(edge_feat)
+        edge_feat = torch.nn.functional.tanh(edge_feat)
+        edge_feat = self.lin2(edge_feat)
+        
+        # save edges with largest weights
+        n_edges = edge_feat.shape[0]
+        edge_feat = edge_feat.reshape(-1,  n_edges // 2)
+        edge_classes = edge_attr[:, 1].reshape(-1, n_edges // 2)
+        max_inds = torch.argmin(edge_feat, dim=0)
+
+        edge_feat = edge_feat[max_inds, range(n_edges // 2)]
+        edge_classes = edge_classes[max_inds, range(n_edges // 2)]
+        
+        edges = edges[:, :n_edges // 2]
+
+        return edges, edge_feat, edge_classes
     
     
 
