@@ -1,0 +1,25 @@
+paths:
+  save_dir: ../training_outputs/
+  saved_model_path: 
+graph_settings:
+  experiment: "z"
+  code_size: 5
+  repetitions: 5
+  min_error_rate: 0.001
+  max_error_rate: 0.005
+  m_nearest_nodes: 10
+  n_node_features: 5
+  power: 2
+  n_classes: 1
+training_settings:
+  seed: Null
+  dataset_size: 10000
+  validation_set_size: 10000
+  batch_size: 1000
+  epochs: 10
+  gradient_factor: 2
+  lr: 0.01
+  device: cuda
+  resume_training: False
+  current_epoch: 0
+

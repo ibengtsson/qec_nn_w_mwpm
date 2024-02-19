@@ -30,12 +30,14 @@ def parse_yaml(yaml_config):
         config["paths"] = {
             "root": "../",
             "save_dir": "../training_outputs",
-            "model_name": "graph_decoder",
+            "saved_model_path": "..",
         }
         config["graph_settings"] = {
+            "experiment": "z",
             "code_size": 5,
             "repetitions": 5,
-            "error_rate": 0.01,
+            "min_error_rate": 0.001,
+            "max_error_rate": 0.005,
             "m_nearest_nodes": 10,
             "n_node_features": 5,
             "power": 2,
@@ -44,9 +46,11 @@ def parse_yaml(yaml_config):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         config["training_settings"] = {
             "seed": None,
-            "dataset_size": int(1e6),
-            "batch_size": int(1e4),
+            "dataset_size": int(1e4),
+            "validation_set_size": int(1e3),
+            "batch_size": int(1e3),
             "epochs": 5,
+            "gradient_factor": 2,
             "lr": 0.01,
             "device": device,
             "resume_training": False,
@@ -76,8 +80,8 @@ def inference(
     edge_index, edge_weights, edge_classes = model(x, edge_index, edge_attr, detector_labels)
     preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
     n_correct = (preds == flips).sum()
-    accuracy = n_correct / flips.shape[0]
-    return accuracy
+    
+    return n_correct
 
 def predict_mwpm(
     edge_index: torch.Tensor,
@@ -96,8 +100,8 @@ def predict_mwpm(
     preds = []
     for edges, weights, classes in zip(edges_p_graph, weights_p_graph, classes_p_graph):
         edges = edges.numpy()
-        weights = weights.numpy()
-        classes = classes.numpy()
+        weights = weights.detach().numpy()
+        classes = classes.detach().numpy()
         
         p = mwpm_prediction(edges, weights, classes)
         preds.append(p)
