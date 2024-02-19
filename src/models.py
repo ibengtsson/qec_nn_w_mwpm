@@ -166,6 +166,8 @@ class SplitSyndromes(nn.Module):
         
         return edges, edge_attr
 
+class GraphNN(nn.Module):
+    pass
     
     
 
