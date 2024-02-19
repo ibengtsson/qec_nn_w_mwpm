@@ -22,7 +22,7 @@ def mwpm_prediction(edges, weights, classes):
     # REMOVE IF WHEN WE HAVE ENSURED THAT THERE IS ALWAYS AN EVEN NUMBER OF EDGES
     if matched_edges:
         classes = np.array([edges_w_classes[edge] for edge in matched_edges])
-        return (classes.sum() + 1) & 1
+        return classes.sum() & 1
     else:
         return 0
 
@@ -33,13 +33,15 @@ class MWPMLoss(torch.autograd.Function):
     def forward(
         ctx,
         edge_indx: torch.Tensor,
-        edge_attr: torch.Tensor,
+        edge_weights: torch.Tensor,
+        edge_classes: torch.Tensor,
         batch_labels: torch.Tensor,
-        node_range: torch.Tensor,
         labels: np.ndarray,
-        delta=0.2,
+        factor=1.5,
     ):
 
+        edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
+        
         # split edges and edge weights per syndrome
         (
             edges_p_graph,
@@ -50,7 +52,6 @@ class MWPMLoss(torch.autograd.Function):
             edge_indx,
             edge_attr,
             batch_labels,
-            node_range
         )
 
         # we must loop through every graph since each one will have given a new set of edge weights
@@ -61,7 +62,7 @@ class MWPMLoss(torch.autograd.Function):
         for i, (edges, weights, classes, edge_map) in enumerate(
             zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph)
         ):
-
+            # print(edges)
             # edges = edges.detach().numpy()
             edges = edges.numpy()
             # weights = weights.detach().numpy()
@@ -70,23 +71,28 @@ class MWPMLoss(torch.autograd.Function):
             classes = classes.numpy()
 
             prediction = mwpm_prediction(edges, weights, classes)
+            # print(f"{prediction=}")
             preds.append(prediction)
 
             # we need a workaround for gradient computations
             preds_partial_de = []
             for j in range(edges.shape[1]):
-                _weights = weights
+                _weights = weights.copy()
                 # _weights[j] *= factor
                 # _weights[j] += factor
-                _weights[j] = _weights[j] + delta
-
-                _classes = classes
+                # _weights[j] = _weights[j] + delta
+                _weights[j] = _weights[j] * factor
+                delta = _weights[j] - weights[j]
+   
+                # _classes = classes
                 # _classes[j] *= factor
                 # _classes[j] += factor
-                _classes[j] = _classes[j] + delta
+                # _classes[j] = _classes[j] + delta
                 pred_w = mwpm_prediction(edges, _weights, classes)
-                pred_c = mwpm_prediction(edges, weights, _classes)
-                preds_partial_de.append([pred_w, pred_c])
+                # print(f"{pred_w=}")
+                # pred_c = mwpm_prediction(edges, weights, _classes)
+                # preds_partial_de.append(pred_w)
+                preds_partial_de.append([pred_w, delta])
                 
             # REMOVE WHEN WE KNOW THAT ALL SYNDROMES HAVE AN EDGE
             if edge_map.numel() == 0:
@@ -109,7 +115,7 @@ class MWPMLoss(torch.autograd.Function):
             preds_grad,
             grad_help,
         )
-        ctx.delta = delta
+        # ctx.delta = delta
         
         return loss
 
@@ -119,9 +125,12 @@ class MWPMLoss(torch.autograd.Function):
         grad_output,
     ):
         shift_preds, grad_help = ctx.saved_tensors
-        preds = grad_help[:, 0][:, None]
-        labels = grad_help[:, 1][:, None]
-        delta = ctx.delta
+        delta = shift_preds[:, 1]
+        shift_preds = shift_preds[:, 0]
+        
+        preds = grad_help[:, 0]
+        labels = grad_help[:, 1]
+        # delta = ctx.delta
         # gradients = (preds - labels) * (shift_preds - preds) / delta
         gradients = (0.5 * (shift_preds + preds) - labels) * (shift_preds - preds) / delta
         # gradients = 0.5 * ((preds - grad_help[:, 1][:, None]) - torch.abs((preds - grad_help[:, 1][:, None] - 1)))
@@ -139,7 +148,7 @@ class MWPMLoss(torch.autograd.Function):
         # print(gradients[:10, :])
         # print(gradients[:100])
         
-        return None, gradients, None, None, None, None
+        return None, gradients, None, None, None, None, None
     
 class SplitSyndromes(nn.Module):
     
