@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime
 import random
 from typing import Callable
-
+from tqdm import tqdm
 
 from src.utils import parse_yaml, inference
 from src.simulations import SurfaceCodeSim
@@ -22,18 +22,19 @@ class ModelTrainer:
         model: nn.Module,
         loss_fun: Callable,
         config: os.PathLike = None,
-        save_model: bool = False,
+        save_model: bool = True,
     ):
 
         # load and initialise settings
         paths, graph_settings, training_settings = parse_yaml(config)
         self.save_dir = Path(paths["save_dir"])
-        self.saved_model_path = Path(paths["saved_model_path"])
+        self.saved_model_path = paths["saved_model_path"]
         self.graph_settings = graph_settings
         self.training_settings = training_settings
         self.save_model = save_model
 
         # current training status
+        self.warmup_epochs = training_settings["warmup_epochs"]
         self.epoch = training_settings["current_epoch"]
         if training_settings["device"] == "cuda":
             self.device = torch.device(
@@ -115,7 +116,7 @@ class ModelTrainer:
         # older models do not have the attribute "best_val_accuracy"
         if not "best_val_accuracy" in self.training_history:
             self.training_history["best_val_accuracy"] = -1
-        self.epoch = saved_attributes["training_history"]["epoch"] + 1
+        self.epoch = saved_attributes["training_history"]["tot_epochs"] + 1
         self.model.load_state_dict(saved_attributes["model"])
         self.optimizer.load_state_dict(saved_attributes["optimizer"])
         self.save_name = self.save_name + "_load_f_" + model_path.name.split(sep=".")[0]
@@ -217,16 +218,23 @@ class ModelTrainer:
 
         return val_accuracy
 
-    def train(self):
+    def train(self, warmup=False):
 
         # training settings
         current_epoch = self.epoch
-        n_epochs = self.training_settings["epochs"]
         dataset_size = self.training_settings["dataset_size"]
         batch_size = self.training_settings["batch_size"]
         n_batches = dataset_size // batch_size
-        loss_fun = self.loss_fun
         gradient_factor = self.training_settings["gradient_factor"]
+
+        # initialise warmup if used
+        if warmup:
+            loss_fun = nn.MSELoss()
+            n_epochs = self.training_settings["warmup_epochs"]
+
+        else:
+            loss_fun = self.loss_fun
+            n_epochs = self.training_settings["tot_epochs"]
 
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
@@ -240,8 +248,7 @@ class ModelTrainer:
         val_syndromes, val_flips, n_val_identities = self.create_test_set(
             n_graphs=n_val_graphs,
         )
-
-        for epoch in range(current_epoch, n_epochs):
+        for epoch in tqdm(range(current_epoch, n_epochs)):
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
@@ -264,17 +271,28 @@ class ModelTrainer:
 
                 # forward/backward pass
                 self.optimizer.zero_grad()
-                edge_index, edge_weights, edge_classes = self.model(
-                    x, edge_index, edge_attr, detector_labels
-                )
-                loss = loss_fun(
-                    edge_index,
-                    edge_weights,
-                    edge_classes,
-                    batch_labels,
-                    flips,
-                    gradient_factor,
-                )
+
+                if warmup:
+                    edge_weights, label = self.model(
+                        x,
+                        edge_index,
+                        edge_attr,
+                        detector_labels,
+                        warmup=warmup,
+                    )
+                    loss = loss_fun(edge_weights, label)
+                else:
+                    edge_index, edge_weights, edge_classes = self.model(
+                        x, edge_index, edge_attr, detector_labels
+                    )
+                    loss = loss_fun(
+                        edge_index,
+                        edge_weights,
+                        edge_classes,
+                        batch_labels,
+                        flips,
+                        gradient_factor,
+                    )
                 loss.backward()
                 self.optimizer.step()
 
@@ -296,10 +314,11 @@ class ModelTrainer:
             )
 
             # save training attributes after every epoch
+            self.epoch = epoch
             self.training_history["epoch"] = epoch
             self.training_history["train_loss"].append(train_loss)
             self.training_history["val_accuracy"].append(val_accuracy)
-            
+
             if self.save_model:
                 self.save_model_w_training_settings()
 
