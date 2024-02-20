@@ -81,8 +81,8 @@ def inference(
     edge_index, edge_weights, edge_classes = model(x, edge_index, edge_attr, detector_labels)
     preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
     n_correct = (preds == flips).sum()
-    
-    return n_correct
+    accuracy = n_correct/len(preds)
+    return n_correct, accuracy
 
 def predict_mwpm(
     edge_index: torch.Tensor,

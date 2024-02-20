@@ -150,25 +150,31 @@ class LocalSearch:
             #self.elite.copy_(self.vector)
         self.jumped = True
             #self.frustration.reset_state()
+        
+    def set_vector(self):
+        if not self.jumped:
+            #self.vector.copy_(self.elite)
+            elite_vals = self.elite[self.value]
+            self.vector[self.value] = elite_vals
 
     def step(self,syndrome,flips):
-        accuracy = inference(self.model,syndrome,flips)
         for i in range(0,10):
             self.set_value()
             self.set_noise()
             self.set_noise_vector()
             self.vector[torch.from_numpy(self.value)] = self.vector[torch.from_numpy(self.value)] + torch.from_numpy(self.value)
             self.update_weights(self.model)
-            new_accuracy = inference(self.model,syndrome,flips)
-            if new_accuracy > accuracy:
+            _, new_accuracy = inference(self.model,syndrome,flips)
+            if new_accuracy > self.top_score:
                 self.set_elite()
                 self.top_score = new_accuracy
+            else:
+                self.set_vector()
             self.idx += 1
 
     def return_topscore(self):
         return self.top_score
             
-
 
 def main():
     
