@@ -162,13 +162,13 @@ class GraphNN(nn.Module):
     ):
 
         x = self.gc(x, edges, edge_attr[:, 0] * edge_attr[:, 1])
-        x = torch.nn.functional.tanh(x)
+        x = torch.tanh(x)
 
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
         edge_feat = torch.cat([x_src, edge_attr[:, [0]], x_dst], dim=-1)
         edge_feat = self.lin1(edge_feat)
-        edge_feat = torch.nn.functional.tanh(edge_feat)
+        edge_feat = torch.tanh(edge_feat)
         edge_feat = self.lin2(edge_feat)
 
         if warmup:
