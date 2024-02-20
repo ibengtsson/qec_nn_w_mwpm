@@ -11,7 +11,6 @@ def main():
     model = GraphNN()
     loss_fun = MWPMLoss.apply
     config = Path('../configs/default_config.yaml')
-    config = None
     
     trainer = ModelTrainer(model, loss_fun, config=config)
     trainer.train(warmup=True)
