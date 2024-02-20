@@ -64,9 +64,9 @@ class MWPMLoss(torch.autograd.Function):
         for i, (edges, weights, classes, edge_map) in enumerate(
             zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph)
         ):
-            edges = edges.numpy()
-            weights = weights.numpy()
-            classes = classes.numpy()
+            edges = edges.cpu().numpy()
+            weights = weights.cpu().numpy()
+            classes = classes.cpu().numpy()
 
             prediction = mwpm_prediction(edges, weights, classes)
             preds.append(prediction)
@@ -131,8 +131,8 @@ class SplitSyndromes(nn.Module):
         super().__init__()
 
     def forward(self, edges, edge_attr, detector_labels):
-
-        node_range = torch.arange(0, detector_labels.shape[0])
+        
+        node_range = torch.arange(0, detector_labels.shape[0]).to(edges.device)
         node_subset = node_range[detector_labels]
 
         valid_labels = torch.isin(edges, node_subset).sum(dim=0) == 2
@@ -162,13 +162,13 @@ class GraphNN(nn.Module):
     ):
 
         x = self.gc(x, edges, edge_attr[:, 0] * edge_attr[:, 1])
-        x = torch.nn.functional.tanh(x)
+        x = torch.tanh(x)
 
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
         edge_feat = torch.cat([x_src, edge_attr[:, [0]], x_dst], dim=-1)
         edge_feat = self.lin1(edge_feat)
-        edge_feat = torch.nn.functional.tanh(edge_feat)
+        edge_feat = torch.tanh(edge_feat)
         edge_feat = self.lin2(edge_feat)
 
         if warmup:

@@ -235,8 +235,8 @@ def get_batch_of_graphs(
         cum_node_sum = np.cumsum(np.count_nonzero(syndromes, axis=(1, 2, 3)))
         cum_node_sum = np.append(cum_node_sum, 0)
 
-        starts = cum_node_sum[virtual_batch_labels - 1]
-        ends = cum_node_sum[virtual_batch_labels]
+        starts = cum_node_sum[virtual_batch_labels.cpu().numpy() - 1]
+        ends = cum_node_sum[virtual_batch_labels.cpu().numpy()]
 
         if isinstance(starts, np.ndarray):
             ranges = [torch.arange(start, end) for start, end in zip(starts, ends)]
