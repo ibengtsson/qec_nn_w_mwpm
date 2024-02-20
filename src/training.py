@@ -204,7 +204,7 @@ class ModelTrainer:
         n_correct_preds = 0
         for syndrome, flip in zip(syndromes, flips):
 
-            _n_correct_preds = inference(
+            _n_correct_preds, _ = inference(
                 self.model,
                 syndrome,
                 flip,
