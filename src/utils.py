@@ -100,9 +100,9 @@ def predict_mwpm(
     
     preds = []
     for edges, weights, classes in zip(edges_p_graph, weights_p_graph, classes_p_graph):
-        edges = edges.numpy()
-        weights = weights.detach().numpy()
-        classes = classes.detach().numpy()
+        edges = edges.cpu().numpy()
+        weights = weights.detach().cpu().numpy()
+        classes = classes.detach().cpu().numpy()
         
         p = mwpm_prediction(edges, weights, classes)
         preds.append(p)
