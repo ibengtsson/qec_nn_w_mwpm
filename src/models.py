@@ -90,7 +90,7 @@ class MWPMLoss(torch.autograd.Function):
             else:
                 grad_data[edge_map, :] = torch.tensor(
                     preds_partial_de, dtype=torch.float32
-                )
+                ).to(grad_data.device)
                 grad_help[edge_map, 0] = prediction
                 grad_help[edge_map, 1] = labels[i]
         preds = np.array(preds)
