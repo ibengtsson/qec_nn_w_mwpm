@@ -12,9 +12,12 @@ from src.graph import extract_edges
 def mwpm_prediction(edges, weights, classes):
 
     # convert edges to dict
-    if edges.shape[0] * edges.shape[1] % 2 != 0:
+    if np.unique(edges).shape[0] % 2 != 0:
         print(edges)
-        print("Odd number of edges!")
+        print(weights)
+        print(classes)
+    if edges.shape[1] == 0:
+        print(edges)
     classes = (classes > 0).astype(np.int32)
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
