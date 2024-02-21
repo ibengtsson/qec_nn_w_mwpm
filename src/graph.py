@@ -347,7 +347,7 @@ def extract_edges(edges, edge_attr, batch_labels):
         weights_per_syndrome.append(new_weights)
         classes_per_syndrome.append(new_edge_classes)
 
-        edge_range = torch.arange(0, edges.shape[1])
+        edge_range = torch.arange(0, edges.shape[1]).to(edges.device)
         edge_indx.append(edge_range[edge_mask[0, :]])
 
     return (
