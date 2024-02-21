@@ -8,7 +8,6 @@ from pathlib import Path
 from datetime import datetime
 import random
 from typing import Callable
-from tqdm import tqdm
 
 from src.utils import parse_yaml, inference
 from src.simulations import SurfaceCodeSim
@@ -248,7 +247,7 @@ class ModelTrainer:
         val_syndromes, val_flips, n_val_identities = self.create_test_set(
             n_graphs=n_val_graphs,
         )
-        for epoch in tqdm(range(current_epoch, n_epochs)):
+        for epoch in range(current_epoch, n_epochs):
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
