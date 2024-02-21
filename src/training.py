@@ -251,6 +251,7 @@ class ModelTrainer:
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
+            print(f"Epoch {epoch}")
             for _ in range(n_batches):
                 # simulate data as we go
                 sim = random.choice(sims)
