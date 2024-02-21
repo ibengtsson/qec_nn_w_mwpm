@@ -102,6 +102,7 @@ class SurfaceCodeSim(QECCodeSim):
         seed=None,
     ):
         super().__init__(repetitions, distance, p, n_shots, code_task, seed)
+        self.code_task = code_task
 
     def syndrome_mask(self):
         sz = self.distance + 1
@@ -114,7 +115,7 @@ class SurfaceCodeSim(QECCodeSim):
 
         return np.dstack([syndrome_x + syndrome_z] * (self.repetitions + 1))
 
-    def generate_syndromes(self, n_syndromes=None, n_shots=None):
+    def generate_syndromes(self, use_for_mwpm=False, n_syndromes=None, n_shots=None):
         stabilizer_changes, flips, n_trivial_preds = super().sample_syndromes(n_shots)
 
         mask = np.repeat(
@@ -125,9 +126,19 @@ class SurfaceCodeSim(QECCodeSim):
             :, self.det_coords[:, 1], self.det_coords[:, 0], self.det_coords[:, 2]
         ] = stabilizer_changes
         
-        # legacy error? the difference is already "baked in" within Stim?
-        # syndromes[..., 1:] = (syndromes[..., 1:] - syndromes[..., 0:-1]) % 2
         syndromes[np.nonzero(syndromes)] = mask[np.nonzero(syndromes)]
+        
+        if use_for_mwpm:
+            n_z = np.count_nonzero(syndromes == 3, axis=(1, 2, 3))
+            n_x = np.count_nonzero(syndromes == 1, axis=(1, 2, 3))
+            
+            if self.code_task == "surface_code:rotated_memory_z":
+                remove = (n_z > 0) < (n_x > 0)
+            else:
+                remove = (n_x > 0) < (n_z > 0)
+            syndromes = syndromes[~remove, ...]
+            flips = flips[~remove]
+            n_trivial_preds += remove.sum()
 
         # make sure we get enough non-trivial syndromes if a certain number is desired
         if n_syndromes is not None:
