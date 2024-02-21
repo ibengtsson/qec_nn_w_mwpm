@@ -181,7 +181,7 @@ class ModelTrainer:
                 int(n_graphs / n),
                 code_task=code_task,
             )
-            syndrome, flip, n_id = sim.generate_syndromes()
+            syndrome, flip, n_id = sim.generate_syndromes(use_for_mwpm=True)
             syndromes.append(syndrome)
             flips.append(flip)
             n_identities += n_id
@@ -255,7 +255,7 @@ class ModelTrainer:
             for _ in range(n_batches):
                 # simulate data as we go
                 sim = random.choice(sims)
-                syndromes, flips, n_trivial = sim.generate_syndromes()
+                syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True)
                 epoch_n_trivial += n_trivial
                 x, edge_index, edge_attr, batch_labels, detector_labels = (
                     get_batch_of_graphs(
