@@ -10,6 +10,12 @@
 module purge
 source ~/scripts/load_env.sh
 
-# send script
-config=$1
+# use default config if no file is provided as an input
+if [$# -eq 0]
+then
+    config="../configs/default_config.yaml"
+else
+    config=$1
+fi
+
 python3 ../scripts/train.py -c $config
