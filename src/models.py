@@ -8,10 +8,14 @@ import numpy as np
 import pymatching
 from qecsim.graphtools import mwpm
 from src.graph import extract_edges
+from signal import signal, SIGINT
+import sys
 
+def handler(signalnum, frame):
+    sys.exit(0)
 
 def mwpm_prediction(edges, weights, classes):
-
+    signal(SIGINT, handler)
     # convert edges to dict
     if np.unique(edges).shape[0] % 2 != 0:
         print(edges)
