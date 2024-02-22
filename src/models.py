@@ -17,7 +17,12 @@ def mwpm_prediction(edges, weights, classes):
         print(weights)
         print(classes)
     if edges.shape[1] == 0:
+        print("No edges?")
         print(edges)
+        print(weights)
+        print(classes)
+        
+        
     classes = (classes > 0).astype(np.int32)
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
@@ -130,7 +135,6 @@ class MWPMLoss(torch.autograd.Function):
 
         return None, gradients, None, None, None, None, None
 
-
 class SplitSyndromes(nn.Module):
 
     def __init__(self):
@@ -185,11 +189,10 @@ class GraphNN(nn.Module):
             n_edges = edge_feat.shape[0]
             edge_feat = edge_feat.reshape(-1, n_edges // 2)
             edge_classes = edge_attr[:, 1].reshape(-1, n_edges // 2)
-            max_inds = torch.argmin(edge_feat, dim=0)
+            min_inds = torch.argmin(edge_feat, dim=0)
+            edge_feat = edge_feat[min_inds, range(n_edges // 2)]
+            edge_classes = edge_classes[min_inds, range(n_edges // 2)]
 
-            edge_feat = edge_feat[max_inds, range(n_edges // 2)]
-            edge_classes = edge_classes[max_inds, range(n_edges // 2)]
-
-            edges = edges[:, : n_edges // 2]
-
+            edges = edges[:, :n_edges // 2]
+            
             return edges, edge_feat, edge_classes
