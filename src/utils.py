@@ -81,7 +81,7 @@ def inference(
         syndromes, m_nearest_nodes, experiment=experiment, device=device
     )
     edge_index, edge_weights, edge_classes = model(x, edge_index, edge_attr, detector_labels)
-    preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
+    preds = predict_mwpm_with_pool(edge_index, edge_weights, edge_classes, batch_labels)
     n_correct = (preds == flips).sum()
     accuracy = n_correct/len(preds)
     return n_correct, accuracy
@@ -111,8 +111,7 @@ def predict_mwpm(
         preds.append(p)
 
     return np.array(preds)
-# I don't recommend using this function unless you are sure you are going to run the program
-# until completion, terminating with ctrl+c does not work and causes problems
+# ctrl+c termination should be supported now, but use this function with some caution!
 def predict_mwpm_with_pool(
     edge_index: torch.Tensor,
     edge_weights: torch.Tensor,
