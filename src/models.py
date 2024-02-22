@@ -2,6 +2,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch_geometric.nn as nng
+from torch_geometric.utils import sort_edge_index
 from scipy.spatial.distance import cdist
 import numpy as np
 import pymatching
@@ -173,8 +174,16 @@ class GraphNN(nn.Module):
 
         x = self.gc(x, edges, edge_attr[:, 0] * edge_attr[:, 1])
         x = torch.tanh(x)
-
+        
+        # split syndromes so only X (Z) nodes remain
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
+        
+        # after the graph layers, degenerate edges 0-1 and 1-0 can be removed
+        edges, edge_attr = sort_edge_index(edges, edge_attr)
+        edges = edges[:, :edges.shape[1] // 2]
+        edge_attr = edge_attr[:edge_attr[0] // 2, :]
+        
+        # create an edge embedding
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
         edge_feat = torch.cat([x_src, edge_attr[:, [0]], x_dst], dim=-1)
         edge_feat = self.lin1(edge_feat)
