@@ -6,22 +6,9 @@ import sys
 sys.path.append("../")
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import MWPMLoss
+from src.models import MWPMLoss, SplitSyndromes, GraphNN
 from src.utils import inference
 
-
-class SplitSyndromes(nn.Module):
-
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, edges, edge_attr, detector_labels):
-
-        node_range = torch.arange(0, detector_labels.shape[0])
-        node_subset = node_range[detector_labels]
-
-        valid_labels = torch.isin(edges, node_subset).sum(dim=0) == 2
-        return edges[:, valid_labels], edge_attr[valid_labels, :]
 
 
 class EdgeConv(nn.Module):
@@ -57,39 +44,39 @@ class EdgeConv(nn.Module):
         edge_feat = self.sigmoid(edge_feat)
         return edges, edge_feat
     
-class GraphNN(nn.Module):
+# class GraphNN(nn.Module):
     
-    def __init__(self):
-        super().__init__()
-        self.gc = nng.GraphConv(5, 16)
-        self.split_syndromes = SplitSyndromes()
+#     def __init__(self):
+#         super().__init__()
+#         self.gc = nng.GraphConv(5, 16)
+#         self.split_syndromes = SplitSyndromes()
         
-        self.lin = nn.Linear(33, 1)
-        self.sigmoid = nn.Sigmoid()
+#         self.lin = nn.Linear(33, 1)
+#         self.sigmoid = nn.Sigmoid()
         
-    def forward(self, x, edges, edge_attr, detector_labels):
+#     def forward(self, x, edges, edge_attr, detector_labels):
 
-        x = self.gc(x, edges, edge_attr[:, 1])
-        x = torch.nn.functional.tanh(x)
+#         x = self.gc(x, edges, edge_attr[:, 1])
+#         x = torch.nn.functional.tanh(x)
         
-        edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
-        x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
-        edge_feat = torch.cat([x_src, edge_attr[:, 0][:, None], x_dst], dim=-1)
-        edge_feat = self.lin(edge_feat)
+#         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
+#         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
+#         edge_feat = torch.cat([x_src, edge_attr[:, 0][:, None], x_dst], dim=-1)
+#         edge_feat = self.lin(edge_feat)
         
-        # save edges with largest weights
-        n_edges = edge_feat.shape[0]
-        edge_feat = edge_feat.reshape(-1,  n_edges // 2)
-        edge_classes = edge_attr[:, 1].reshape(-1, n_edges // 2)
-        max_inds = torch.argmin(edge_feat, dim=0)
+#         # save edges with largest weights
+#         n_edges = edge_feat.shape[0]
+#         edge_feat = edge_feat.reshape(-1,  n_edges // 2)
+#         edge_classes = edge_attr[:, 1].reshape(-1, n_edges // 2)
+#         max_inds = torch.argmin(edge_feat, dim=0)
 
-        edge_feat = edge_feat[max_inds, range(n_edges // 2)]
-        edge_classes = edge_classes[max_inds, range(n_edges // 2)]
+#         edge_feat = edge_feat[max_inds, range(n_edges // 2)]
+#         edge_classes = edge_classes[max_inds, range(n_edges // 2)]
         
-        edges = edges[:, :n_edges // 2]
+#         edges = edges[:, :n_edges // 2]
 
-        # edge_feat = self.sigmoid(edge_feat)
-        return edges, edge_feat, edge_classes
+#         # edge_feat = self.sigmoid(edge_feat)
+#         return edges, edge_feat, edge_classes
     
 class LocalSearch:
     def __init__(self, model):
@@ -129,7 +116,7 @@ class LocalSearch:
     def set_noise(self):
         # Cast to precision and CUDA, and edit shape
         # 0.5 can be adjusted to fit scale of noise
-        self.magnitude.uniform_(-0.5, 0.5).squeeze()
+        self.magnitude.uniform_(-0.1, 0.1).squeeze()
 
     def set_noise_vector(self):
         """ This function defines a noise tensor, and returns it. The noise
@@ -158,7 +145,9 @@ class LocalSearch:
             self.vector[self.value] = elite_vals
 
     def step(self,syndrome,flips):
-        for i in range(0,10):
+        #print(self.vector)
+        _,self.top_score = inference(self.model,syndrome,flips)
+        for i in range(0,100):
             self.set_value()
             self.set_noise()
             self.set_noise_vector()
@@ -171,6 +160,8 @@ class LocalSearch:
             else:
                 self.set_vector()
             self.idx += 1
+            #self.top_score -= 0.002
+
 
     def return_topscore(self):
         return self.top_score
@@ -184,7 +175,7 @@ def main():
     n_shots = 8000
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
     n_epochs = 10
-    n_batches = 5
+    #n_batches = 5
     factor = 0.5
     
     model = GraphNN()
@@ -194,41 +185,16 @@ def main():
     optim = LocalSearch(model)
     
     for epoch in range(n_epochs):
-        train_acc = 0
-        epoch_n_graphs = 0
-        
-        # if epoch > 0:
-        #     params = list(model.parameters())
-        #     for i, p in enumerate(params):
-        #         print(f"Parameter {i}: {torch.count_nonzero(p.grad).item()} non-zero gradients.")
-
-        for i in range(n_batches):
-            #optim.zero_grad()
-            syndromes, flips, n_trivial = sim.generate_syndromes(n_shots)
-            #x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, 10)
-            #edges, edge_feat = model(x, edges, edge_attr, detector_labels)
-            optim.step(syndromes,flips)
-            #node_range = torch.arange(0, x.shape[0])
-            # loss = loss_fun(
-            #     edges,
-            #     edge_feat,
-            #     batch_labels,
-            #     node_range,
-            #     np.array(flips) * 1,
-            #     factor
-            #     )
-    
-            #loss.backward()
-            #optim.step()
-            n_graphs = syndromes.shape[0]
-            top_accuracy = optim.return_topscore()
-            train_acc += top_accuracy * n_graphs
-            #train_loss += loss.item() * n_graphs
-            epoch_n_graphs += n_graphs
-            print(i)
-        train_acc /= epoch_n_graphs
-    
-        print(train_acc)
+        #train_acc = 0
+        #epoch_n_graphs = 0
+        syndromes, flips, n_trivial = sim.generate_syndromes(n_shots)
+        optim.step(syndromes,flips)
+        n_graphs = syndromes.shape[0]
+        top_accuracy = optim.return_topscore()
+        #train_acc += top_accuracy * n_graphs
+        #epoch_n_graphs = n_graphs
+        #train_acc /= epoch_n_graphs
+        print(top_accuracy)
 
 if __name__ == "__main__":
     main()
