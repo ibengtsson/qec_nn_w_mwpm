@@ -281,6 +281,7 @@ def get_batch_of_graphs(
     edge_index = torch.cat([edge_index, edge_index], dim=1)
 
     # mark which detectors that are of type experiment
+    label = {"z": 1, "x": 0}
     detector_labels = x[:, label[experiment]] == 1
 
     return x, edge_index, edge_attr, batch_labels, detector_labels
@@ -298,14 +299,12 @@ def extract_graphs(x, edges, edge_attr, batch_labels):
     edge_classes = edge_attr[:, 1]
     for i in range(batch_labels[-1] + 1):
         ind_range = torch.nonzero(batch_labels == i)
+        edge_mask = torch.isin(edges, ind_range)
 
         # nodes
         nodes_per_syndrome.append(x[ind_range])
 
         # edges
-        edge_mask = (edges >= node_range[ind_range[0]]) & (
-            edges <= node_range[ind_range[-1]]
-        )
         new_edges = edges[:, edge_mask[0, :]] - node_range[ind_range[0]]
         new_weights = edge_weights[edge_mask[0, :]]
         new_edge_classes = edge_classes[edge_mask[0, :]]
@@ -349,6 +348,8 @@ def extract_edges(edges, edge_attr, batch_labels):
 
         edge_range = torch.arange(0, edges.shape[1]).to(edges.device)
         edge_indx.append(edge_range[edge_mask[0, :]])
+        if torch.unique(new_edges).shape[0] & 1 == 1:
+            print(new_edges)
 
     return (
         edges_per_syndrome,
