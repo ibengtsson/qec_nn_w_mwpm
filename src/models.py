@@ -179,9 +179,9 @@ class GraphNN(nn.Module):
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
         
         # after the graph layers, degenerate edges 0-1 and 1-0 can be removed
-        edges, edge_attr = sort_edge_index(edges, edge_attr)
-        edges = edges[:, :edges.shape[1] // 2]
-        edge_attr = edge_attr[:edge_attr[0] // 2, :]
+        # edges, edge_attr = sort_edge_index(edges, edge_attr)
+        # edges = edges[:, :edges.shape[1] // 2]
+        # edge_attr = edge_attr[:edge_attr.shape[0] // 2, :]
         
         # create an edge embedding
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
