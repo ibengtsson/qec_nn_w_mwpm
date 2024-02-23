@@ -16,6 +16,7 @@ then
     echo "Using using default config file"
     config="../configs/default_config.yaml"
 else
+    echo "Using config file: $1"
     config=$1
 fi
 
