@@ -42,6 +42,7 @@ class ModelTrainer:
         else:
             self.device = torch.device("cpu")
 
+        print(f"Running model on {self.device} with batch size {training_settings['batch_size']}.")
         # create a dictionary saving training metrics
         training_history = {}
         training_history["epoch"] = self.epoch
