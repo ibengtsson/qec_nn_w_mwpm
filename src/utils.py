@@ -5,6 +5,8 @@ import torch.nn as nn
 import numpy as np
 from src.graph import get_batch_of_graphs, extract_edges
 from src.models import mwpm_prediction
+import torch.multiprocessing as mp
+from torch.multiprocessing import Pool, cpu_count
 
 
 def time_it(func, reps, *args):
@@ -79,10 +81,11 @@ def inference(
         syndromes, m_nearest_nodes, experiment=experiment, device=device
     )
     edge_index, edge_weights, edge_classes = model(x, edge_index, edge_attr, detector_labels)
-    preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
+    preds = predict_mwpm_with_pool(edge_index, edge_weights, edge_classes, batch_labels)
     n_correct = (preds == flips).sum()
     accuracy = n_correct/len(preds)
     return n_correct, accuracy
+
 
 def predict_mwpm(
     edge_index: torch.Tensor,
@@ -108,4 +111,29 @@ def predict_mwpm(
         preds.append(p)
 
     return np.array(preds)
+# ctrl+c termination should be supported now, but use this function with some caution!
+def predict_mwpm_with_pool(
+    edge_index: torch.Tensor,
+    edge_weights: torch.Tensor,
+    edge_classes: torch.Tensor,
+    batch_labels: torch.Tensor,
+):
+    # split edges and edge weights per syndrome
+    edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
+    edges_p_graph, weights_p_graph, classes_p_graph, _ = extract_edges(
+        edge_index,
+        edge_attr,
+        batch_labels,
+    )
+    
+    preds = []
+    edges_p_graph = [t.cpu().numpy() for t in edges_p_graph]
+    weights_p_graph = [t.cpu().detach().numpy() for t in weights_p_graph]
+    classes_p_graph = [t.cpu().detach().numpy() for t in classes_p_graph]
+    with Pool(processes=(cpu_count()-1)) as p:
+        preds = p.starmap(mwpm_prediction, list(zip(edges_p_graph, weights_p_graph, classes_p_graph)))
+
+    return np.array(preds)
+
+
     
