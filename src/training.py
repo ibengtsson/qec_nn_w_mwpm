@@ -35,7 +35,7 @@ class ModelTrainer:
         # current training status
         self.warmup_epochs = training_settings["warmup_epochs"]
         self.epoch = training_settings["current_epoch"]
-        if training_settings["device"] == "cuda":
+        if "cuda" in training_settings["device"]:
             self.device = torch.device(
                 training_settings["device"] if torch.cuda.is_available() else "cpu"
             )
