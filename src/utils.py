@@ -54,6 +54,7 @@ def parse_yaml(yaml_config):
             "warmup_epochs": 100,
             "tot_epochs": 10,
             "gradient_factor": 3,
+            "warmup_lr": 0.01,
             "lr": 0.001,
             "device": device,
             "resume_training": False,
@@ -111,6 +112,7 @@ def predict_mwpm(
         preds.append(p)
 
     return np.array(preds)
+
 # ctrl+c termination should be supported now, but use this function with some caution!
 def predict_mwpm_with_pool(
     edge_index: torch.Tensor,
