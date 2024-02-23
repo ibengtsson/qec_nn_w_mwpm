@@ -13,13 +13,14 @@ graph_settings:
   n_classes: 1
 training_settings:
   seed: Null
-  dataset_size: 10000
-  validation_set_size: 1000
-  batch_size: 5000
-  warmup_epochs: 20
-  tot_epochs: 100
+  dataset_size: 1000000
+  validation_set_size: 10000
+  batch_size: 50000
+  warmup_epochs: 300
+  tot_epochs: 800
   gradient_factor: 2
-  lr: 0.001
+  warmup_lr: 0.001
+  lr: 0.0001
   device: cuda
   resume_training: False
   current_epoch: 0
