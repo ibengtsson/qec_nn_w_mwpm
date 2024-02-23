@@ -11,7 +11,7 @@ module purge
 source ~/scripts/load_env.sh
 
 # use default config if no file is provided as an input
-if [$# -eq 0]
+if [ $# -eq 0 ]
 then
     echo "Using using default config file"
     config="../configs/default_config.yaml"
