@@ -59,7 +59,7 @@ class ModelTrainer:
         self.model = model.to(self.device)
         self.loss_fun = loss_fun
         self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=training_settings["lr"]
+            self.model.parameters(), lr=training_settings["warmup_lr"]
         )
 
         # generate a unique name to not overwrite other models
@@ -235,6 +235,10 @@ class ModelTrainer:
         else:
             loss_fun = self.loss_fun
             n_epochs = self.training_settings["tot_epochs"]
+            
+            # change learning rate from the warmup's
+            for g in self.optimizer.param_groups:
+                g['lr'] = self.training_settings["lr"]
 
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
