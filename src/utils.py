@@ -126,6 +126,7 @@ def predict_mwpm_with_pool(
     batch_labels: torch.Tensor,
 ):
     # split edges and edge weights per syndrome
+    
     edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
     edges_p_graph, weights_p_graph, classes_p_graph, _ = extract_edges(
         edge_index,
