@@ -15,8 +15,8 @@ training_settings:
   seed: Null
   dataset_size: 1000000
   validation_set_size: 10000
-  batch_size: 30000
-  warmup_epochs: 100
+  batch_size: 20000
+  warmup_epochs: 0
   tot_epochs: 800
   gradient_factor: 2
   warmup_lr: 0.001
