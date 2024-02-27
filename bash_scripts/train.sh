@@ -20,4 +20,4 @@ else
     config=$1
 fi
 
-python3 ../scripts/train.py -c $config
+python3 ../scripts/train.py -c $config --save
