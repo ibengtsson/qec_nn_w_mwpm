@@ -3,7 +3,6 @@ import numpy as np
 import torch.nn as nn
 import torch_geometric.nn as nng
 import os
-import sys
 from pathlib import Path
 from datetime import datetime
 import random
@@ -257,6 +256,8 @@ class ModelTrainer:
             epoch_n_graphs = 0
             epoch_n_trivial = 0
             print(f"Epoch {epoch}")
+            start_t = datetime.now()
+            
             for _ in range(n_batches):
                 # simulate data as we go
                 sim = random.choice(sims)
@@ -326,6 +327,9 @@ class ModelTrainer:
 
             if self.save_model:
                 self.save_model_w_training_settings()
+                
+            epoch_t = datetime.now() - start_t
+            print(f"The epoch took: {epoch_t}")
 
     def get_training_metrics(self):
 
