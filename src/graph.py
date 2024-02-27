@@ -195,8 +195,10 @@ def get_batch_of_graphs(
     # get edge indices
     if m_nearest_nodes:
         edge_index = knn_graph(x[:, 2:], m_nearest_nodes, batch=batch_labels)
-
+    
+    # DOES NOT WORK
     else:
+        print("WARNING: DOES NOT WORK AS OF NOW")
         n = x.shape[0]
         edge_index = torch.cat(
             (
@@ -205,7 +207,7 @@ def get_batch_of_graphs(
             ),
             axis=1,
         )
-
+        
     # create virtual nodes for the graphs with odd number of nodes (counted per Z/X-class)
     label = {"z": 3, "x": 1}
     even_odd = np.count_nonzero(syndromes == label[experiment], axis=(1, 2, 3)) & 1
@@ -237,7 +239,7 @@ def get_batch_of_graphs(
 
         starts = cum_node_sum[virtual_batch_labels.cpu().numpy() - 1]
         ends = cum_node_sum[virtual_batch_labels.cpu().numpy()]
-
+        
         if isinstance(starts, np.ndarray):
             ranges = [torch.arange(start, end) for start, end in zip(starts, ends)]
         else:
@@ -257,7 +259,21 @@ def get_batch_of_graphs(
 
         # append to existing indices
         edge_index = torch.cat([edge_index, new_edges], dim=1)
-
+    
+    # # make sure we get edges between Z (X) nodes (in rare cases KNN will not create the needed edges)
+    # label = {"z": 1, "x": 0}
+    # exp_nodes_ind = torch.nonzero(x[:, label[experiment]])
+    # exp_edge_check = torch.isin(edge_index, exp_nodes_ind).sum(dim=0) == 2
+    
+    # # no edges at all between Z (X) nodes
+    # if exp_edge_check.sum() == 0:
+    #     pass
+    
+    # # uneven number of nodes in edges
+    # nodes_in_edges = torch.unique(torch.cat([edge_index[0, exp_edge_check], edge_index[1, exp_edge_check]]))
+    # if nodes_in_edges.shape[0] & 1 == 1:
+        # print("We have an uneven number of nodes in our edge set")
+        
     # compute edge attributes (we'll have one edge for inner-distance and one for outer-distance)
     wrap_axis = {"x": 1, "z": 0}
     in_dist = inside_distance(x[edge_index[0, :], 2:], x[edge_index[1, :], 2:])
@@ -337,7 +353,6 @@ def extract_edges(edges, edge_attr, batch_labels):
     for i in range(n):
         ind_range = torch.nonzero(batch_labels == i)
         edge_mask = torch.isin(edges, ind_range)
-
         new_edges = edges[:, edge_mask[0, :]]
         new_weights = edge_weights[edge_mask[0, :]]
         new_edge_classes = edge_classes[edge_mask[0, :]]
@@ -348,8 +363,7 @@ def extract_edges(edges, edge_attr, batch_labels):
 
         edge_range = torch.arange(0, edges.shape[1]).to(edges.device)
         edge_indx.append(edge_range[edge_mask[0, :]])
-        if torch.unique(new_edges).shape[0] & 1 == 1:
-            print(new_edges)
+        
 
     return (
         edges_per_syndrome,
