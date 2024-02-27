@@ -141,7 +141,7 @@ def predict_mwpm_with_pool(
     with Pool(processes=(cpu_count()-1)) as p:
         preds = p.starmap_async(mwpm_prediction, list(zip(edges_p_graph, weights_p_graph, classes_p_graph)), chunksize=chunk_size)
 
-    return np.array(preds)
+    return np.array(preds.get())
 
 
     
