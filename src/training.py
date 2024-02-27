@@ -329,7 +329,7 @@ class ModelTrainer:
                 self.save_model_w_training_settings()
                 
             epoch_t = datetime.now() - start_t
-            print(f"The epoch took: {epoch_t}, for {n_graphs}.")
+            print(f"The epoch took: {epoch_t}, for {n_graphs} graphs.")
 
     def get_training_metrics(self):
 
