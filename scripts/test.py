@@ -14,7 +14,7 @@ import sys
 
 sys.path.append("../")
 from src.simulations import SurfaceCodeSim
-from src.graph import get_batch_of_graphs
+from src.graph import get_batch_of_graphs, extract_edges, extract_edges_v2
 from src.utils import time_it
 
 
@@ -285,23 +285,14 @@ def main():
     n_shots = 10000
 
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
-    syndromes, flips, _ = sim.generate_syndromes(n_shots)
-    x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, 20, code_sz)
-    time_it(get_batch_of_graphs, 100, syndromes, 20, code_sz)
+    syndromes, flips, _ = sim.generate_syndromes(use_for_mwpm=True)
+    x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, 20)
+    time_it(extract_edges, 2, edges, edge_attr, batch_labels)
+    time_it(extract_edges_v2, 2, edges, edge_attr, batch_labels)
 
+    
+    
     return 
-    loss_fun = MWPMLoss.apply
-    edge_attr.requires_grad = True
-    loss = loss_fun(
-        x,
-        edges,
-        edge_attr,
-        batch_labels,
-        np.array(flips) * 1,
-    )
-    loss.backward()
-    print(loss)
-
 
 def test_nn():
 
