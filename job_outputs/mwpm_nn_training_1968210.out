@@ -1,0 +1,25 @@
+This job can be monitored from: https://scruffy.c3se.chalmers.se/d/alvis-job/alvis-job?var-jobid=1968210&from=1709022593000
+Using config file: ../configs/default_config.yaml
+Running model on cuda with batch size 30000.
+Epoch 0
+Epoch 1
+Epoch 2
+Epoch 3
+Epoch 4
+Epoch 5
+Epoch 6
+Epoch 7
+Epoch 8
+Epoch 9
+Epoch 10
+Epoch 11
+Epoch 12
+Epoch 13
+Epoch 14
+Epoch 15
+Epoch 16
+Epoch 17
+Epoch 18
+Epoch 19
+Epoch 20
+slurmstepd: error: *** JOB 1968210 ON alvis7-14 CANCELLED AT 2024-02-27T09:41:37 ***
