@@ -340,7 +340,6 @@ def extract_graphs(x, edges, edge_attr, batch_labels):
         edge_indx,
     )
 
-
 def extract_edges(edges, edge_attr, batch_labels):
 
     edges_per_syndrome = []
@@ -371,3 +370,18 @@ def extract_edges(edges, edge_attr, batch_labels):
         classes_per_syndrome,
         edge_indx,
     )
+
+def extract_edges_v2(edges, edge_attr, batch_labels):
+
+    edge_weights = edge_attr[:, 0]
+    edge_classes = edge_attr[:, 1]
+    
+    n_nodes = batch_labels.max().item() + 1
+    batch_stack = torch.stack([batch_labels] * n_nodes)
+    ind_range = torch.stack([torch.arange(n_nodes)] * batch_labels.shape[0], dim=1)   
+    inds_per_graph = torch.nonzero(batch_stack == ind_range)
+    
+    edge_range = torch.arange(0, edges.shape[1]).to(edges.device)
+    masks = [torch.isin(edges, inds_per_graph[inds_per_graph[:, 0]==i, 1]) for i in range(n_nodes)]
+    res = [(edges[:, mask[0, :]], edge_weights[mask[0, :]], edge_classes[mask[0, :]], edge_range[mask[0, :]]) for mask in masks]
+    return res
