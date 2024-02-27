@@ -142,6 +142,7 @@ class SurfaceCodeSim(QECCodeSim):
 
         # make sure we get enough non-trivial syndromes if a certain number is desired
         if n_syndromes is not None:
+            print("This might not work as expected right now!")
             while syndromes.shape[0] < n_syndromes:
                 n_shots = n_syndromes - len(syndromes)
                 new_syndromes, new_flips, new_n_trivial_preds = self.generate_syndromes(
