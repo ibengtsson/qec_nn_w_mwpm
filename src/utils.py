@@ -76,13 +76,19 @@ def inference(
     experiment: str = "z",
     m_nearest_nodes: int = 10,
     device: torch.device = torch.device("cpu"),
+    pool: bool = False,
 ):
 
     x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
         syndromes, m_nearest_nodes, experiment=experiment, device=device
     )
     edge_index, edge_weights, edge_classes = model(x, edge_index, edge_attr, detector_labels)
-    preds = predict_mwpm_with_pool(edge_index, edge_weights, edge_classes, batch_labels)
+    
+    if pool:
+        preds = predict_mwpm_with_pool(edge_index, edge_weights, edge_classes, batch_labels)
+    else:
+        preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
+    
     n_correct = (preds == flips).sum()
     accuracy = n_correct/len(preds)
     return n_correct, accuracy
