@@ -11,6 +11,7 @@ def main():
     # command line parsing
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--configuration", required=True)
+    parser.add_argument("-s", "--save", required=False, action="store_true")
     args = parser.parse_args() 
     
     # create a model
@@ -18,7 +19,16 @@ def main():
     loss_fun = MWPMLoss.apply
     config = Path(args.configuration)
     
-    trainer = ModelTrainer(model, loss_fun, config=config)
+    # check if model should be saved
+    if args.save:
+        save_or_not = args.save
+        print("Model will be saved after each epoch.")
+    else:
+        save_or_not = False
+        print("Model will not be saved.")
+    
+    # train model
+    trainer = ModelTrainer(model, loss_fun, config=config, save_model=save_or_not)
     trainer.train(warmup=True)
     trainer.train()
     
