@@ -113,7 +113,6 @@ def predict_mwpm(
         edges = edges.cpu().numpy()
         weights = weights.detach().cpu().numpy()
         classes = classes.detach().cpu().numpy()
-        
         p = mwpm_prediction(edges, weights, classes)
         preds.append(p)
 
