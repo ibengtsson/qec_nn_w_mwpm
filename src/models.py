@@ -6,7 +6,7 @@ from torch_geometric.utils import sort_edge_index
 from scipy.spatial.distance import cdist
 import numpy as np
 import pymatching
-from qecsim.graphtools import mwpm
+from qecsim.graphtools import mwpm, mwpm_blossom5
 from src.graph import extract_edges
 from signal import signal, SIGINT
 import sys
@@ -33,7 +33,7 @@ def mwpm_prediction(edges, weights, classes):
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
     
-    matched_edges = mwpm(edges_w_weights)
+    matched_edges = mwpm_blossom5(edges_w_weights)
 
     # need to make sure matched_edges is sorted
     matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
