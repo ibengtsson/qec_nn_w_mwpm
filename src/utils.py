@@ -75,13 +75,20 @@ def inference(
     flips: np.ndarray,
     experiment: str = "z",
     m_nearest_nodes: int = 10,
+    complete_graph: bool = False,
     device: torch.device = torch.device("cpu"),
     pool: bool = False,
 ):
-
-    x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+    if complete_graph:
+        nodes_per_graph = np.count_nonzero(syndromes, axis=(1,2,3))
+        max_nodes = np.max(nodes_per_graph)
+        x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+        syndromes, max_nodes, experiment=experiment, device=device
+        )
+    else:
+        x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
         syndromes, m_nearest_nodes, experiment=experiment, device=device
-    )
+        )
     edge_index, edge_weights, edge_classes = model(x, edge_index, edge_attr, detector_labels)
     
     if pool:
