@@ -147,8 +147,6 @@ class LocalSearch:
 
     def step(self,syndromes,flips):
         #print(self.vector)
-        nodes_per_graph = np.count_nonzero(syndromes, axis=(1,2,3))
-        max_nodes = np.max(nodes_per_graph)
         _,self.top_score = inference(self.model,syndromes,flips)
         for i in range(0,10):
             self.set_value()
@@ -156,7 +154,7 @@ class LocalSearch:
             self.set_noise_vector()
             self.vector[torch.from_numpy(self.value)] = self.vector[torch.from_numpy(self.value)] + torch.from_numpy(self.value)
             self.update_weights(self.model)
-            _, new_accuracy = inference(self.model,syndromes,flips, m_nearest_nodes=max_nodes)
+            _, new_accuracy = inference(self.model,syndromes,flips)
             if new_accuracy > self.top_score:
                 self.set_elite()
                 self.top_score = new_accuracy
@@ -175,12 +173,12 @@ def main():
     
     reps = 3
     code_sz = 3
-    p = 1e-2
-    n_shots = 100
+    p = 1e-3
+    n_shots = 1000
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
-    n_epochs = 2
+    n_epochs = 3
     #n_batches = 5
-    factor = 0.5
+    #factor = 0.5
     
     model = GraphNN()
     model.train()
