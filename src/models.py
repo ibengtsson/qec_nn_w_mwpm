@@ -233,6 +233,6 @@ class GraphNN(nn.Module):
         min_inds = torch.argmin(edge_feat, dim=0)
         edge_feat = edge_feat[min_inds, range(n_edges // 2)]
         edge_classes = edge_classes[min_inds, range(n_edges // 2)]
-
-        edges = edges[:, : n_edges // 2]
+        edges = edges[:, :n_edges // 2]
+        
         return edges, edge_feat, edge_classes
