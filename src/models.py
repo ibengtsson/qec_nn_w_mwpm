@@ -10,6 +10,7 @@ from qecsim.graphtools import mwpm
 from src.graph import extract_edges
 from signal import signal, SIGINT
 import sys
+from src.utils import inference
 
 def handler(signalnum, frame):
     sys.exit(0)
@@ -148,20 +149,14 @@ class SplitSyndromes(nn.Module):
         super().__init__()
 
     def forward(self, edges, edge_attr, detector_labels):
-        
-        # begin by splitting Z and X-stabilizers
+
         node_range = torch.arange(0, detector_labels.shape[0]).to(edges.device)
         node_subset = node_range[detector_labels]
 
         valid_labels = torch.isin(edges, node_subset).sum(dim=0) == 2
         edges = edges[:, valid_labels]
         edge_attr = edge_attr[valid_labels, :]
-        
-        # now we want to remove the pairs (0-1, 1-0 etc)
-        mask = edges[0, :] > edges[1, :]
-        ind_range = torch.arange(edges.shape[1])
-        edges, edge_attr = sort_edge_index(edges[:, ind_range[mask]], edge_attr[mask, :])
-        
+
         return edges, edge_attr
 
 
@@ -234,12 +229,101 @@ class GraphNN(nn.Module):
         
         # otherwise, save the edges with minimum weights (for each duplicate edge)
         n_edges = edge_feat.shape[0]
-        edge_feat = torch.cat([edge_feat[::2], edge_feat[1::2]], dim=1)
-        edge_classes = torch.stack([edge_attr[::2, 1], edge_attr[1::2, 1]], dim=1)
-        
-        min_inds = torch.argmin(edge_feat, dim=1)
-        edge_feat = edge_feat[range(n_edges // 2), min_inds]
-        edge_classes = edge_classes[range(n_edges // 2), min_inds]
-        edges = edges[:, ::2]
+        edge_feat = edge_feat.reshape(-1, n_edges // 2)
+        edge_classes = edge_attr[:, 1].reshape(-1, n_edges // 2)
+        min_inds = torch.argmin(edge_feat, dim=0)
+        edge_feat = edge_feat[min_inds, range(n_edges // 2)]
+        edge_classes = edge_classes[min_inds, range(n_edges // 2)]
+        edges = edges[:, :n_edges // 2]
         
         return edges, edge_feat, edge_classes
+
+    
+
+class LocalSearch:
+    def __init__(self, model, search_radius):
+        self.model = model
+        self.initial_score = torch.tensor(float(0))
+        self.top_score = self.initial_score
+        self.target = None
+        self.vector = torch.nn.utils.parameters_to_vector(model.parameters())
+        self.elite = self.vector.clone()
+        self.n = self.vector.numel()
+        self.running_idxs = np.arange(self.n)
+        np.random.shuffle(self.running_idxs)
+        self.idx = 0
+        self.value = []  # list of indices
+        self.num_selections = 25
+        self.magnitude = torch.empty(self.num_selections,
+                                dtype=self.vector.dtype,
+                                device=self.vector.device)
+        self.noise_vector = torch.empty_like(self.vector)
+        self.jumped = False
+        self.search_radius = search_radius
+
+    def set_value(self):
+        """Use the numpy choices function (which has no equivalent in Pytorch)
+        to generate a sample from the array of indices. The sample size and
+        distribution are dynamically updated by the algorithm's state.
+        """
+        self.check_idx()
+        choices = self.running_idxs[self.idx:self.idx+self.num_selections]
+        self.value = choices
+        self.idx+=self.num_selections
+
+    def check_idx(self):
+        if (self.idx+self.num_selections)>self.n:
+            self.idx=0
+            np.random.shuffle(self.running_idxs)
+
+    def set_noise(self):
+        # Cast to precision and CUDA, and edit shape
+        # 0.5 can be adjusted to fit scale of noise
+        self.magnitude.uniform_(-self.search_radius, self.search_radius).squeeze()
+
+    def set_noise_vector(self):
+        """ This function defines a noise tensor, and returns it. The noise
+        tensor needs to be the same shape as our originial vecotr. Hence, a
+        "basis" tensor is created with zeros, then the chosen indices are
+        modified.
+        """
+        self.noise_vector.fill_(0.)
+        self.noise_vector[self.value] = self.magnitude
+
+    def update_weights(self, model):
+        nn.utils.vector_to_parameters(self.vector, model.parameters())
+
+    def set_elite(self):
+        self.jumped = False
+        self.elite[self.value] = self.vector[self.value]
+            #self.elite.clamp_(-0.9, 0.9)
+            #self.elite.copy_(self.vector)
+        self.jumped = True
+            #self.frustration.reset_state()
+        
+    def set_vector(self):
+        if not self.jumped:
+            #self.vector.copy_(self.elite)
+            elite_vals = self.elite[self.value]
+            self.vector[self.value] = elite_vals
+
+    def step(self,syndromes,flips):
+        #print(self.vector)
+        self.set_value()
+        self.set_noise()
+        self.set_noise_vector()
+        self.vector[torch.from_numpy(self.value)] = self.vector[torch.from_numpy(self.value)] + torch.from_numpy(self.value)
+        self.update_weights(self.model)
+        _, new_accuracy = inference(self.model,syndromes,flips)
+        if new_accuracy > self.top_score:
+            self.set_elite()
+            self.top_score = new_accuracy
+        else:
+            self.set_vector()
+        self.idx += 1
+            # decay to escape local maxima
+            #self.top_score -= 0.002
+
+
+    def return_topscore(self):
+        return self.top_score
