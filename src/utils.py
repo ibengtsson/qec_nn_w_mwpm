@@ -75,29 +75,26 @@ def inference(
     flips: np.ndarray,
     experiment: str = "z",
     m_nearest_nodes: int = 10,
-    complete_graph: bool = False,
     device: torch.device = torch.device("cpu"),
     pool: bool = False,
 ):
-    if complete_graph:
-        nodes_per_graph = np.count_nonzero(syndromes, axis=(1,2,3))
-        max_nodes = np.max(nodes_per_graph)
-        x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
-        syndromes, max_nodes, experiment=experiment, device=device
-        )
-    else:
-        x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+
+    x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
         syndromes, m_nearest_nodes, experiment=experiment, device=device
-        )
-    edge_index, edge_weights, edge_classes = model(x, edge_index, edge_attr, detector_labels)
-    
+    )
+    edge_index, edge_weights, edge_classes = model(
+        x, edge_index, edge_attr, detector_labels
+    )
+
     if pool:
-        preds = predict_mwpm_with_pool(edge_index, edge_weights, edge_classes, batch_labels)
+        preds = predict_mwpm_with_pool(
+            edge_index, edge_weights, edge_classes, batch_labels
+        )
     else:
         preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
-    
+
     n_correct = (preds == flips).sum()
-    accuracy = n_correct/len(preds)
+    accuracy = n_correct / len(preds)
     return n_correct, accuracy
 
 
@@ -114,7 +111,7 @@ def predict_mwpm(
         edge_attr,
         batch_labels,
     )
-    
+
     preds = []
     for edges, weights, classes in zip(edges_p_graph, weights_p_graph, classes_p_graph):
         edges = edges.cpu().numpy()
@@ -125,6 +122,7 @@ def predict_mwpm(
 
     return np.array(preds)
 
+
 # ctrl+c termination should be supported now, but use this function with some caution!
 def predict_mwpm_with_pool(
     edge_index: torch.Tensor,
@@ -133,23 +131,24 @@ def predict_mwpm_with_pool(
     batch_labels: torch.Tensor,
 ):
     # split edges and edge weights per syndrome
-    
+
     edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
     edges_p_graph, weights_p_graph, classes_p_graph, _ = extract_edges(
         edge_index,
         edge_attr,
         batch_labels,
     )
-    
+
     preds = []
     edges_p_graph = [t.cpu().numpy() for t in edges_p_graph]
     weights_p_graph = [t.cpu().detach().numpy() for t in weights_p_graph]
     classes_p_graph = [t.cpu().detach().numpy() for t in classes_p_graph]
     chunk_size = 500
-    with Pool(processes=(cpu_count()-1)) as p:
-        preds = p.starmap(mwpm_prediction, list(zip(edges_p_graph, weights_p_graph, classes_p_graph)), chunksize=chunk_size)
+    with Pool(processes=(cpu_count() - 1)) as p:
+        preds = p.starmap(
+            mwpm_prediction,
+            list(zip(edges_p_graph, weights_p_graph, classes_p_graph)),
+            chunksize=chunk_size,
+        )
 
     return np.array(preds)
-
-
-    
