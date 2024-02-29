@@ -297,7 +297,6 @@ class ModelTrainer:
                         edge_classes,
                         batch_labels,
                         flips,
-                        gradient_factor,
                     )
                 loss.backward()
                 self.optimizer.step()
