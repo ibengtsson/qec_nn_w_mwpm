@@ -192,25 +192,17 @@ def get_batch_of_graphs(
     x = torch.tensor(node_features[:, x_cols]).to(device)
     batch_labels = torch.tensor(node_features[:, batch_col]).long().to(device)
 
-    # get edge indices
+    # get edge indices (and ensure that the graph is undirected)
     if m_nearest_nodes:
         edge_index = knn_graph(x[:, 2:], m_nearest_nodes, batch=batch_labels)
-        
-        # ensure that the graph is undirected
         edge_index = to_undirected(edge_index)    
     
-    # DOES NOT WORK
     else:
-        print("WARNING: DOES NOT WORK AS OF NOW")
-        n = x.shape[0]
-        edge_index = torch.cat(
-            (
-                torch.triu_indices(n, n, offset=1),
-                torch.flipud(torch.triu_indices(n, n, offset=1)),
-            ),
-            axis=1,
-        )
-        
+        max_nodes = np.count_nonzero(syndromes, axis=(1, 2, 3)).max()
+        print(max_nodes)
+        edge_index = knn_graph(x[:, 2:], max_nodes, batch=batch_labels)
+        edge_index = to_undirected(edge_index)    
+
     # create virtual nodes for the graphs with odd number of nodes (counted per Z/X-class)
     label = {"z": 3, "x": 1}
     even_odd = np.count_nonzero(syndromes == label[experiment], axis=(1, 2, 3)) & 1
