@@ -241,7 +241,7 @@ class GraphNN(nn.Module):
     
 
 class LocalSearch:
-    def __init__(self, model, search_radius):
+    def __init__(self, model, search_radius, num_selections):
         self.model = model
         self.initial_score = torch.tensor(float(0))
         self.top_score = self.initial_score
@@ -253,7 +253,7 @@ class LocalSearch:
         np.random.shuffle(self.running_idxs)
         self.idx = 0
         self.value = []  # list of indices
-        self.num_selections = 25
+        self.num_selections = num_selections
         self.magnitude = torch.empty(self.num_selections,
                                 dtype=self.vector.dtype,
                                 device=self.vector.device)
