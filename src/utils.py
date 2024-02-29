@@ -8,7 +8,6 @@ from src.models import mwpm_prediction
 import torch.multiprocessing as mp
 from torch.multiprocessing import Pool, cpu_count
 
-
 def time_it(func, reps, *args):
     start_t = datetime.datetime.now()
     for i in range(reps):
