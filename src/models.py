@@ -278,7 +278,7 @@ class LocalSearch:
 
     def set_noise(self):
         # Cast to precision and CUDA, and edit shape
-        # 0.5 can be adjusted to fit scale of noise
+        # search radius can be adjusted to fit scale of noise
         self.magnitude.uniform_(-self.search_radius, self.search_radius).squeeze()
 
     def set_noise_vector(self):
