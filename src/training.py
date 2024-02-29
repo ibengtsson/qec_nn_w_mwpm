@@ -648,8 +648,9 @@ class LSTrainer:
 
         n_epochs = self.training_settings["tot_epochs"]
         search_radius = self.training_settings["search_radius"]
-        # actual training optimizer
-        ls = LocalSearch(self.model, search_radius)        
+        num_selections = self.training_settings["num_selections"]
+        # training optimizer
+        ls = LocalSearch(self.model, search_radius, num_selections)        
 
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
