@@ -148,14 +148,20 @@ class SplitSyndromes(nn.Module):
         super().__init__()
 
     def forward(self, edges, edge_attr, detector_labels):
-
+        
+        # begin by splitting Z and X-stabilizers
         node_range = torch.arange(0, detector_labels.shape[0]).to(edges.device)
         node_subset = node_range[detector_labels]
 
         valid_labels = torch.isin(edges, node_subset).sum(dim=0) == 2
         edges = edges[:, valid_labels]
         edge_attr = edge_attr[valid_labels, :]
-
+        
+        # now we want to remove the pairs (0-1, 1-0 etc)
+        mask = edges[0, :] > edges[1, :]
+        ind_range = torch.arange(edges.shape[1])
+        edges, edge_attr = sort_edge_index(edges[:, ind_range[mask]], edge_attr[mask, :])
+        
         return edges, edge_attr
 
 
@@ -228,11 +234,12 @@ class GraphNN(nn.Module):
         
         # otherwise, save the edges with minimum weights (for each duplicate edge)
         n_edges = edge_feat.shape[0]
-        edge_feat = edge_feat.reshape(-1, n_edges // 2)
-        edge_classes = edge_attr[:, 1].reshape(-1, n_edges // 2)
-        min_inds = torch.argmin(edge_feat, dim=0)
-        edge_feat = edge_feat[min_inds, range(n_edges // 2)]
-        edge_classes = edge_classes[min_inds, range(n_edges // 2)]
-        edges = edges[:, :n_edges // 2]
+        edge_feat = torch.cat([edge_feat[::2], edge_feat[1::2]], dim=1)
+        edge_classes = torch.stack([edge_attr[::2, 1], edge_attr[1::2, 1]], dim=1)
+        
+        min_inds = torch.argmin(edge_feat, dim=1)
+        edge_feat = edge_feat[range(n_edges // 2), min_inds]
+        edge_classes = edge_classes[range(n_edges // 2), min_inds]
+        edges = edges[:, ::2]
         
         return edges, edge_feat, edge_classes
