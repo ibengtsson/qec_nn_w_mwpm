@@ -8,7 +8,7 @@
 
 # load modules and environment
 module purge
-source ~/scripts/load_env.sh
+# source ~/scripts/load_env.sh
 
 # use default config if no file is provided as an input
 if [ $# -eq 0 ]
@@ -20,4 +20,5 @@ else
     config=$1
 fi
 
-python3 ../scripts/train.py -c $config --save
+apptainer exec ~/containers/torch/PyG.sif python ../scripts/train.py -c $config --save
+# python3 ../scripts/train.py -c $config --save
