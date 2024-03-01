@@ -243,8 +243,9 @@ def get_batch_of_graphs(
         del _x
         
         # identify which nodes that are virtual in the sorted array, the replace -1 with +1 to mark stabilizer as usual
-        virtual_node_labels = ind_range[x[:, label[experiment]] == -1]
-        x[x[:, label[experiment]] == -1, label[experiment]] = 1
+        mask = (x[:, label[experiment]] == -1).to(device)
+        virtual_node_labels = ind_range[mask]
+        x[mask, label[experiment]] = 1
         
         # sort batch labels
         batch_labels, _ = torch.sort(batch_labels)
