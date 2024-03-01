@@ -245,6 +245,7 @@ def get_batch_of_graphs(
         # identify which nodes that are virtual in the sorted array, the replace -1 with +1 to mark stabilizer as usual
         mask = (x[:, label[experiment]] == -1).to(device)
         virtual_node_labels = ind_range[mask]
+        print(x.device, mask.device)
         x[mask, label[experiment]] = 1
         
         # sort batch labels
