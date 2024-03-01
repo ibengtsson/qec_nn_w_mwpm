@@ -3,8 +3,8 @@ paths:
   saved_model_path: 
 graph_settings:
   experiment: "z"
-  code_size: 5
-  repetitions: 5
+  code_size: 3
+  repetitions: 3
   min_error_rate: 0.001
   max_error_rate: 0.005
   m_nearest_nodes: 20
