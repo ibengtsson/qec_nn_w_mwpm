@@ -329,8 +329,6 @@ class ModelTrainer:
 
             if self.save_model:
                 self.save_model_w_training_settings()
-                
-            epoch_t = datetime.now() - start_t
 
     def get_training_metrics(self):
 
