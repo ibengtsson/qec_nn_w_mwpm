@@ -68,5 +68,5 @@ def main_ls():
     
 
 if __name__ == "__main__":
-    main()    
+    main_ls()    
 
