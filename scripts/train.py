@@ -3,7 +3,7 @@ import torch
 import argparse
 import sys
 sys.path.append("../")
-from src.models import GraphNN, MWPMLoss
+from src.models import GraphNN, MWPMLoss, MWPMLoss_v2
 from src.training import ModelTrainer
 
 def main():
@@ -16,7 +16,7 @@ def main():
     
     # create a model
     model = GraphNN()
-    loss_fun = MWPMLoss.apply
+    loss_fun = MWPMLoss_v2.apply
     config = Path(args.configuration)
     
     # check if model should be saved

@@ -194,12 +194,12 @@ def get_batch_of_graphs(
 
     # get edge indices (and ensure that the graph is undirected)
     if m_nearest_nodes:
+        print(x.device, batch_labels.device)
         edge_index = knn_graph(x[:, 2:], m_nearest_nodes, batch=batch_labels)
         edge_index = to_undirected(edge_index)    
     
     else:
         max_nodes = np.count_nonzero(syndromes, axis=(1, 2, 3)).max()
-        print(max_nodes)
         edge_index = knn_graph(x[:, 2:], max_nodes, batch=batch_labels)
         edge_index = to_undirected(edge_index)    
 
@@ -235,6 +235,7 @@ def get_batch_of_graphs(
         
         # now, let's sort the nodes in groups so we can have a sorted batch label array
         ind_range = torch.arange(x.shape[0], dtype=torch.int64).to(device)
+        print(ind_range.device, batch_labels.device)
         sort_ind = group_argsort(ind_range, batch_labels, return_consecutive=True)
         _x = torch.zeros_like(x)
         _x[sort_ind, :] = x
@@ -242,8 +243,10 @@ def get_batch_of_graphs(
         del _x
         
         # identify which nodes that are virtual in the sorted array, the replace -1 with +1 to mark stabilizer as usual
-        virtual_node_labels = ind_range[x[:, label[experiment]] == -1]
-        x[x[:, label[experiment]] == -1, label[experiment]] = 1
+        mask = (x[:, label[experiment]] == -1).to(device)
+        virtual_node_labels = ind_range[mask]
+        print(x.device, mask.device)
+        x[mask, label[experiment]] = 1
         
         # sort batch labels
         batch_labels, _ = torch.sort(batch_labels)
@@ -253,23 +256,22 @@ def get_batch_of_graphs(
         _, unique_counts = torch.unique(batch_labels, return_counts=True)
         cum_sum = torch.cumsum(unique_counts, dim=0)
         # low_ind = torch.cat([torch.tensor([0]), cum_sum[even_odd.astype(bool)] - 1])
-        low_ind = torch.cat([torch.tensor([0]), cum_sum[even_odd.astype(bool)]])
-        high_ind = torch.cat([cum_sum[even_odd.astype(bool)] - 1, torch.tensor([batch_labels.shape[0]])])
-        index_remap = torch.cat([torch.ones(high - low, dtype=torch.int64) * i for i, (high, low) in enumerate(zip(high_ind, low_ind))])
+        low_ind = torch.cat([torch.tensor([0], device=device), cum_sum[even_odd.astype(bool)]])
+        high_ind = torch.cat([cum_sum[even_odd.astype(bool)] - 1, torch.tensor([batch_labels.shape[0]], device=device)])
+        index_remap = torch.cat([torch.ones(high - low, dtype=torch.int64) * i for i, (high, low) in enumerate(zip(high_ind, low_ind))]).to(device)
         
         # add offset introduced by squeezing in virtual nodes
-        # print(sort_edge_index(edge_index[:, :15]))
         edge_index[0, :] += index_remap[edge_index[0, :]]
         edge_index[1, :] += index_remap[edge_index[1, :]]
-        # print(sort_edge_index(edge_index[:, :15]))
+
         # add the edges created by virtual nodes
-        cum_sum = torch.cat([torch.tensor([0]), cum_sum])
+        cum_sum = torch.cat([torch.tensor([0], device=device), cum_sum])
         low_ind = cum_sum[0:-1][even_odd.astype(bool)]
         high_ind = cum_sum[1:][even_odd.astype(bool)] - 1
         
         target_nodes = torch.cat([ind_range[low:high] for low, high in zip(low_ind, high_ind)])
-        source_nodes = torch.cat([torch.ones(sz, dtype=torch.int64) * ind for sz, ind in zip(unique_counts[even_odd.astype(bool)] - 1, high_ind)])
-        new_edges = torch.cat([torch.stack([target_nodes, source_nodes]), torch.stack([source_nodes, target_nodes])], dim=1).to(device)
+        source_nodes = torch.cat([torch.ones(sz, dtype=torch.int64, device=device) * ind for sz, ind in zip(unique_counts[even_odd.astype(bool)] - 1, high_ind)])
+        new_edges = torch.cat([torch.stack([target_nodes, source_nodes]), torch.stack([source_nodes, target_nodes])], dim=1)
         
         # append to existing indices
         edge_index = torch.cat([edge_index, new_edges], dim=1)
