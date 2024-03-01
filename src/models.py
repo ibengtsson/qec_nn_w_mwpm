@@ -2,6 +2,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch_geometric.nn as nng
+from torch_geometric.utils import sort_edge_index
 import numpy as np
 from qecsim.graphtools import mwpm
 from src.graph import extract_edges
@@ -233,6 +234,11 @@ class SplitSyndromes(nn.Module):
         edges = edges[:, valid_labels]
         edge_attr = edge_attr[valid_labels, :]
 
+        # now we want to remove the pairs (0-1, 1-0 etc)
+        mask = edges[0, :] > edges[1, :]
+        ind_range = torch.arange(edges.shape[1])
+        edges, edge_attr = sort_edge_index(edges[:, ind_range[mask]], edge_attr[mask, :])
+        
         return edges, edge_attr
 
 
