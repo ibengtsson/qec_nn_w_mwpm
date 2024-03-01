@@ -268,8 +268,8 @@ def get_batch_of_graphs(
         high_ind = cum_sum[1:][even_odd.astype(bool)] - 1
         
         target_nodes = torch.cat([ind_range[low:high] for low, high in zip(low_ind, high_ind)])
-        source_nodes = torch.cat([torch.ones(sz, dtype=torch.int64) * ind for sz, ind in zip(unique_counts[even_odd.astype(bool)] - 1, high_ind)])
-        new_edges = torch.cat([torch.stack([target_nodes, source_nodes]), torch.stack([source_nodes, target_nodes])], dim=1).to(device)
+        source_nodes = torch.cat([torch.ones(sz, dtype=torch.int64, device=device) * ind for sz, ind in zip(unique_counts[even_odd.astype(bool)] - 1, high_ind)])
+        new_edges = torch.cat([torch.stack([target_nodes, source_nodes]), torch.stack([source_nodes, target_nodes])], dim=1)
         
         # append to existing indices
         edge_index = torch.cat([edge_index, new_edges], dim=1)
