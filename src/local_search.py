@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from src.utils import inference
-#test
+
 class LocalSearch:
     def __init__(self, model, search_radius, num_selections):
         self.model = model
