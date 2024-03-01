@@ -3,8 +3,8 @@ import torch
 import argparse
 import sys
 sys.path.append("../")
-from src.models import GraphNN, MWPMLoss, MWPMLoss_v2
-from src.training import ModelTrainer, LSTrainer
+from src.models import GraphNN
+from src.training import LSTrainer
 
 
 def main():
