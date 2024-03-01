@@ -4,7 +4,15 @@ import numpy as np
 import torch
 from torch_geometric.nn import knn_graph
 from torch_geometric.transforms import Distance
-from torch_geometric.utils import group_argsort, sort_edge_index, is_undirected, to_undirected
+from torch_geometric.utils import (
+    group_argsort,
+    sort_edge_index,
+    is_undirected,
+    to_undirected,
+    unbatch_edge_index,
+    cumsum,
+    degree,
+)
 
 
 def get_node_list_3D(syndrome_3D):
@@ -195,12 +203,12 @@ def get_batch_of_graphs(
     # get edge indices (and ensure that the graph is undirected)
     if m_nearest_nodes:
         edge_index = knn_graph(x[:, 2:], m_nearest_nodes, batch=batch_labels)
-        edge_index = to_undirected(edge_index)    
-    
+        edge_index = to_undirected(edge_index)
+
     else:
         max_nodes = np.count_nonzero(syndromes, axis=(1, 2, 3)).max()
         edge_index = knn_graph(x[:, 2:], max_nodes, batch=batch_labels)
-        edge_index = to_undirected(edge_index)    
+        edge_index = to_undirected(edge_index)
 
     # create virtual nodes for the graphs with odd number of nodes (counted per Z/X-class)
     label = {"z": 3, "x": 1}
@@ -211,10 +219,10 @@ def get_batch_of_graphs(
             (np.sum(even_odd), n_node_features), dtype=torch.float32
         ).to(device)
         label = {"z": 1, "x": 0}
-        
+
         # let virtual nodes be marked by -1 (momentarily) so we can create a label for them
         virtual_nodes[:, label[experiment]] = -1
-        virtual_nodes[:, 2:-1] = syndromes.shape[1] // 2 
+        virtual_nodes[:, 2:-1] = syndromes.shape[1] // 2
         virtual_nodes[:, -1] = syndromes.shape[-1] // 2
 
         # # create batch labels
@@ -226,9 +234,9 @@ def get_batch_of_graphs(
 
         # add virtual nodes to node list and extend batch labels
         x = torch.cat((x, virtual_nodes), axis=0)
-        
+
         batch_labels = torch.cat((batch_labels, virtual_batch_labels), axis=0)
-        
+
         # now, let's sort the nodes in groups so we can have a sorted batch label array
         ind_range = torch.arange(x.shape[0], dtype=torch.int64).to(device)
         sort_ind = group_argsort(ind_range, batch_labels, return_consecutive=True)
@@ -236,24 +244,35 @@ def get_batch_of_graphs(
         _x[sort_ind, :] = x
         x = _x
         del _x
-        
+
         # identify which nodes that are virtual in the sorted array, the replace -1 with +1 to mark stabilizer as usual
         mask = (x[:, label[experiment]] == -1).to(device)
         virtual_node_labels = ind_range[mask]
         x[mask, label[experiment]] = 1
-        
+
         # sort batch labels
         batch_labels, _ = torch.sort(batch_labels)
-        
-        
+
         # extend edge indices
         _, unique_counts = torch.unique(batch_labels, return_counts=True)
         cum_sum = torch.cumsum(unique_counts, dim=0)
         # low_ind = torch.cat([torch.tensor([0]), cum_sum[even_odd.astype(bool)] - 1])
-        low_ind = torch.cat([torch.tensor([0], device=device), cum_sum[even_odd.astype(bool)]])
-        high_ind = torch.cat([cum_sum[even_odd.astype(bool)] - 1, torch.tensor([batch_labels.shape[0]], device=device)])
-        index_remap = torch.cat([torch.ones(high - low, dtype=torch.int64) * i for i, (high, low) in enumerate(zip(high_ind, low_ind))]).to(device)
-        
+        low_ind = torch.cat(
+            [torch.tensor([0], device=device), cum_sum[even_odd.astype(bool)]]
+        )
+        high_ind = torch.cat(
+            [
+                cum_sum[even_odd.astype(bool)] - 1,
+                torch.tensor([batch_labels.shape[0]], device=device),
+            ]
+        )
+        index_remap = torch.cat(
+            [
+                torch.ones(high - low, dtype=torch.int64) * i
+                for i, (high, low) in enumerate(zip(high_ind, low_ind))
+            ]
+        ).to(device)
+
         # add offset introduced by squeezing in virtual nodes
         edge_index[0, :] += index_remap[edge_index[0, :]]
         edge_index[1, :] += index_remap[edge_index[1, :]]
@@ -262,61 +281,30 @@ def get_batch_of_graphs(
         cum_sum = torch.cat([torch.tensor([0], device=device), cum_sum])
         low_ind = cum_sum[0:-1][even_odd.astype(bool)]
         high_ind = cum_sum[1:][even_odd.astype(bool)] - 1
-        
-        target_nodes = torch.cat([ind_range[low:high] for low, high in zip(low_ind, high_ind)])
-        source_nodes = torch.cat([torch.ones(sz, dtype=torch.int64, device=device) * ind for sz, ind in zip(unique_counts[even_odd.astype(bool)] - 1, high_ind)])
-        new_edges = torch.cat([torch.stack([target_nodes, source_nodes]), torch.stack([source_nodes, target_nodes])], dim=1)
-        
+
+        target_nodes = torch.cat(
+            [ind_range[low:high] for low, high in zip(low_ind, high_ind)]
+        )
+        source_nodes = torch.cat(
+            [
+                torch.ones(sz, dtype=torch.int64, device=device) * ind
+                for sz, ind in zip(unique_counts[even_odd.astype(bool)] - 1, high_ind)
+            ]
+        )
+        new_edges = torch.cat(
+            [
+                torch.stack([target_nodes, source_nodes]),
+                torch.stack([source_nodes, target_nodes]),
+            ],
+            dim=1,
+        )
+
         # append to existing indices
         edge_index = torch.cat([edge_index, new_edges], dim=1)
-        
+
         # sort edge index
         edge_index = sort_edge_index(edge_index)
-        
-        # print(edge_index[:, :15])
 
-        # # extend edge indices
-        # cum_node_sum = np.cumsum(np.count_nonzero(syndromes, axis=(1, 2, 3)))
-        # cum_node_sum = np.append(cum_node_sum, 0)
-
-        # starts = cum_node_sum[virtual_batch_labels.cpu().numpy() - 1]
-        # ends = cum_node_sum[virtual_batch_labels.cpu().numpy()]
-        
-        # if isinstance(starts, np.ndarray):
-        #     ranges = [torch.arange(start, end) for start, end in zip(starts, ends)]
-        # else:
-        #     ranges = [torch.arange(starts, ends)]
-        # numbering = torch.arange(n_nodes_before, n_nodes_after)
-
-        # new_edges = torch.cat(
-        #     [
-        #         torch.stack(
-        #             [target, torch.ones(target.shape, dtype=torch.int64) * num], dim=0
-        #         )
-        #         for target, num in zip(ranges, numbering)
-        #     ],
-        #     dim=1,
-        # ).to(device)
-        # new_edges = torch.cat([new_edges, torch.flipud(new_edges)], dim=1)
-
-        # # append to existing indices
-        # edge_index = torch.cat([edge_index, new_edges], dim=1)
-        
-    
-    # # make sure we get edges between Z (X) nodes (in rare cases KNN will not create the needed edges)
-    # label = {"z": 1, "x": 0}
-    # exp_nodes_ind = torch.nonzero(x[:, label[experiment]])
-    # exp_edge_check = torch.isin(edge_index, exp_nodes_ind).sum(dim=0) == 2
-    
-    # # no edges at all between Z (X) nodes
-    # if exp_edge_check.sum() == 0:
-    #     pass
-    
-    # # uneven number of nodes in edges
-    # nodes_in_edges = torch.unique(torch.cat([edge_index[0, exp_edge_check], edge_index[1, exp_edge_check]]))
-    # if nodes_in_edges.shape[0] & 1 == 1:
-        # print("We have an uneven number of nodes in our edge set")
-        
     # compute edge attributes (we'll have one edge for inner-distance and one for outer-distance)
     wrap_axis = {"x": 1, "z": 0}
     in_dist = inside_distance(x[edge_index[0, :], 2:], x[edge_index[1, :], 2:])
@@ -326,14 +314,14 @@ def get_batch_of_graphs(
         syndromes.shape[1],
         wrap_axis[experiment],
     )
-    
+
     dist = torch.cat([in_dist, out_dist], dim=0) ** power
-    
+
     # if the edge is connected to a virtual node, let dist = 1
     # CAN BE IMPROVED
     if even_odd.sum() > 0:
         virtual_edges = torch.isin(edge_index, virtual_node_labels)
-        virtual_edges_mask = torch.cat([torch.any(virtual_edges, dim=0)]*2)
+        virtual_edges_mask = torch.cat([torch.any(virtual_edges, dim=0)] * 2)
         dist[virtual_edges_mask] = 1
 
     # mark inner distance -1 and outer +1
@@ -353,6 +341,7 @@ def get_batch_of_graphs(
 
     return x, edge_index, edge_attr, batch_labels, detector_labels
 
+
 def extract_graphs(x, edges, edge_attr, batch_labels):
 
     node_range = torch.arange(0, x.shape[0])
@@ -365,7 +354,7 @@ def extract_graphs(x, edges, edge_attr, batch_labels):
     edge_weights = edge_attr[:, 0]
     edge_classes = edge_attr[:, 1]
     for i in range(batch_labels[-1] + 1):
-        
+
         ind_range = torch.nonzero(batch_labels == i)
         edge_mask = torch.isin(edges, ind_range)
 
@@ -392,56 +381,21 @@ def extract_graphs(x, edges, edge_attr, batch_labels):
         edge_indx,
     )
 
-def extract_edges(edges, edge_attr, batch_labels):
 
-    edges_per_syndrome = []
-    weights_per_syndrome = []
-    classes_per_syndrome = []
-    edge_indx = []
-    edge_weights = edge_attr[:, 0]
-    edge_classes = edge_attr[:, 1]
-    n = torch.unique(batch_labels).shape[0]
-    for i in range(n):
-        ind_range = torch.nonzero(batch_labels == i)
-        edge_mask = torch.isin(edges, ind_range)
-        edge_mask = edge_mask[0, :] & edge_mask[1, :]
-        
-        new_edges = edges[:, edge_mask]
-        new_weights = edge_weights[edge_mask]
-        new_edge_classes = edge_classes[edge_mask]
+def extract_edges(edge_index, edge_attr, batch_labels):
 
-        edges_per_syndrome.append(new_edges)
-        weights_per_syndrome.append(new_weights)
-        classes_per_syndrome.append(new_edge_classes)
+    batch_size = batch_labels.max() + 1
+    deg = degree(batch_labels, batch_size, dtype=torch.long)
+    ptr = cumsum(deg)
 
-        edge_range = torch.arange(0, edges.shape[1]).to(edges.device)
-        edge_indx.append(edge_range[edge_mask])
-        
+    edge_batch = batch_labels[edge_index[0]]
+    edge_index = edge_index - ptr[edge_batch]
+    sizes = degree(edge_batch, batch_size, dtype=torch.long).cpu().tolist()
 
-    return (
-        edges_per_syndrome,
-        weights_per_syndrome,
-        classes_per_syndrome,
-        edge_indx,
-    )
+    edge_range = torch.arange(0, edge_index.shape[1]).to(edge_index.device)
+    edges_p_graph = edge_index.split(sizes, dim=1)
+    weights_p_graph = edge_attr[:, 0].split(sizes)
+    classes_p_graph = edge_attr[:, 1].split(sizes)
+    labels = edge_range.split(sizes)
 
-def extract_edges_v2(edges, edge_attr, batch_labels):
-
-    edge_weights = edge_attr[:, 0]
-    edge_classes = edge_attr[:, 1]
-    
-    n_nodes = batch_labels.max().item() + 1
-    batch_stack = torch.stack([batch_labels] * n_nodes)
-    ind_range_row = torch.stack([torch.arange(n_nodes)] * batch_labels.shape[0], dim=1)   
-    ind_range_col = torch.stack([torch.arange(n_nodes)] * batch_labels.shape[0], dim=0) 
-    print(batch_labels)
-    print(batch_stack)
-    print(ind_range_row)
-    print(ind_range_col)
-    print(batch_stack == ind_range_row)
-    inds_per_graph = torch.nonzero(batch_stack == ind_range_row)
-    
-    edge_range = torch.arange(0, edges.shape[1]).to(edges.device)
-    masks = [torch.isin(edges, inds_per_graph[inds_per_graph[:, 0]==i, 1]) for i in range(n_nodes)]
-    res = [(edges[:, mask[0, :]], edge_weights[mask[0, :]], edge_classes[mask[0, :]], edge_range[mask[0, :]]) for mask in masks]
-    return res
+    return edges_p_graph, weights_p_graph, classes_p_graph, labels
