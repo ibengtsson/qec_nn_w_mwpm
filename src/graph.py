@@ -194,7 +194,6 @@ def get_batch_of_graphs(
 
     # get edge indices (and ensure that the graph is undirected)
     if m_nearest_nodes:
-        print(x.device, batch_labels.device)
         edge_index = knn_graph(x[:, 2:], m_nearest_nodes, batch=batch_labels)
         edge_index = to_undirected(edge_index)    
     
@@ -208,7 +207,6 @@ def get_batch_of_graphs(
     even_odd = np.count_nonzero(syndromes == label[experiment], axis=(1, 2, 3)) & 1
 
     if even_odd.sum() > 0:
-        print("Virtual nodes added")
         virtual_nodes = torch.zeros(
             (np.sum(even_odd), n_node_features), dtype=torch.float32
         ).to(device)
@@ -227,15 +225,12 @@ def get_batch_of_graphs(
         )
 
         # add virtual nodes to node list and extend batch labels
-        n_nodes_before = x.shape[0]
         x = torch.cat((x, virtual_nodes), axis=0)
         
         batch_labels = torch.cat((batch_labels, virtual_batch_labels), axis=0)
-        n_nodes_after = x.shape[0]
         
         # now, let's sort the nodes in groups so we can have a sorted batch label array
         ind_range = torch.arange(x.shape[0], dtype=torch.int64).to(device)
-        print(ind_range.device, batch_labels.device)
         sort_ind = group_argsort(ind_range, batch_labels, return_consecutive=True)
         _x = torch.zeros_like(x)
         _x[sort_ind, :] = x
@@ -245,7 +240,6 @@ def get_batch_of_graphs(
         # identify which nodes that are virtual in the sorted array, the replace -1 with +1 to mark stabilizer as usual
         mask = (x[:, label[experiment]] == -1).to(device)
         virtual_node_labels = ind_range[mask]
-        print(x.device, mask.device)
         x[mask, label[experiment]] = 1
         
         # sort batch labels
