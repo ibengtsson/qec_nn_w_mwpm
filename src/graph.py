@@ -194,12 +194,12 @@ def get_batch_of_graphs(
 
     # get edge indices (and ensure that the graph is undirected)
     if m_nearest_nodes:
+        print(x.device, batch_labels.device)
         edge_index = knn_graph(x[:, 2:], m_nearest_nodes, batch=batch_labels)
         edge_index = to_undirected(edge_index)    
     
     else:
         max_nodes = np.count_nonzero(syndromes, axis=(1, 2, 3)).max()
-        print(max_nodes)
         edge_index = knn_graph(x[:, 2:], max_nodes, batch=batch_labels)
         edge_index = to_undirected(edge_index)    
 
