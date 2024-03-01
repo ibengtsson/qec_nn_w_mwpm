@@ -236,7 +236,7 @@ class SplitSyndromes(nn.Module):
 
         # now we want to remove the pairs (0-1, 1-0 etc)
         mask = edges[0, :] > edges[1, :]
-        ind_range = torch.arange(edges.shape[1])
+        ind_range = torch.arange(edges.shape[1]).to(edges.device)
         edges, edge_attr = sort_edge_index(edges[:, ind_range[mask]], edge_attr[mask, :])
         
         return edges, edge_attr
