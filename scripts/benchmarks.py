@@ -13,7 +13,7 @@ def main():
     reps = 5
     code_sz = 5
     p = 1e-3
-    n_shots = 1000
+    n_shots = 20000
     m_nearest_nodes = 20
 
     sim = SurfaceCodeSim(reps, code_sz, p, n_shots)

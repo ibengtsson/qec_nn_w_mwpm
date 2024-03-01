@@ -6,22 +6,22 @@ graph_settings:
   code_size: 5
   repetitions: 5
   min_error_rate: 0.001
-  max_error_rate: 0.001
-  m_nearest_nodes: 10
+  max_error_rate: 0.005
+  m_nearest_nodes: 20
   n_node_features: 5
   power: 2
   n_classes: 1
 training_settings:
   seed: Null
   dataset_size: 5000
-  validation_set_size: 100
-  batch_size: 1000
+  validation_set_size: 5000
+  batch_size: 5000
   warmup_epochs: 0
-  tot_epochs: 20
+  tot_epochs: 30
   gradient_factor: 2
   warmup_lr: 0.001
   lr: 0.001
-  device: cuda:1
+  device: cuda
   resume_training: False
   current_epoch: 0
 

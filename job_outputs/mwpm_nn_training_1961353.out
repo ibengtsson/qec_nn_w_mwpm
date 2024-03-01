@@ -1,0 +1,17 @@
+This job can be monitored from: https://scruffy.c3se.chalmers.se/d/alvis-job/alvis-job?var-jobid=1961353&from=1708680840000
+/tmp/slurmd/job1961353/slurm_script: line 14: [1: command not found
+/cephyr/users/isakbe/Alvis/code/qec_nn_w_mwpm/bash_scripts/../src/models.py:184: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  edge_attr = edge_attr[:edge_attr[0] // 2, :]
+Epoch 0
+Traceback (most recent call last):
+  File "/cephyr/users/isakbe/Alvis/code/qec_nn_w_mwpm/bash_scripts/../scripts/train.py", line 32, in <module>
+    main()
+  File "/cephyr/users/isakbe/Alvis/code/qec_nn_w_mwpm/bash_scripts/../scripts/train.py", line 22, in main
+    trainer.train(warmup=True)
+  File "/cephyr/users/isakbe/Alvis/code/qec_nn_w_mwpm/bash_scripts/../src/training.py", line 276, in train
+    edge_weights, label = self.model(
+  File "/apps/Arch/software/PyTorch/1.12.1-foss-2021a-CUDA-11.3.1/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1130, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/cephyr/users/isakbe/Alvis/code/qec_nn_w_mwpm/bash_scripts/../src/models.py", line 184, in forward
+    edge_attr = edge_attr[:edge_attr[0] // 2, :]
+TypeError: only integer tensors of a single element can be converted to an index

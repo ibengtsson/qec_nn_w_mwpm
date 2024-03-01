@@ -1,0 +1,4 @@
+This job can be monitored from: https://scruffy.c3se.chalmers.se/d/alvis-job/alvis-job?var-jobid=1961049&from=1708680746000
+/tmp/slurmd/job1961049/slurm_script: line 14: [0: command not found
+usage: train.py [-h] -c CONFIGURATION
+train.py: error: argument -c/--configuration: expected one argument
