@@ -235,6 +235,7 @@ def get_batch_of_graphs(
         
         # now, let's sort the nodes in groups so we can have a sorted batch label array
         ind_range = torch.arange(x.shape[0], dtype=torch.int64).to(device)
+        print(ind_range.device, batch_labels.device)
         sort_ind = group_argsort(ind_range, batch_labels, return_consecutive=True)
         _x = torch.zeros_like(x)
         _x[sort_ind, :] = x
