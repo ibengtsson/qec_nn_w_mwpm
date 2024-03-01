@@ -1,15 +1,6 @@
-from typing import Any
 import torch
 import torch.nn as nn
-import torch_geometric.nn as nng
-from torch_geometric.utils import sort_edge_index
-from scipy.spatial.distance import cdist
 import numpy as np
-#import pymatching
-from qecsim.graphtools import mwpm
-from src.graph import extract_edges
-from signal import signal, SIGINT
-import sys
 from src.utils import inference
 
 class LocalSearch:
