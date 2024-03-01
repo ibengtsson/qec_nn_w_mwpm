@@ -56,10 +56,7 @@ class ModelTrainer:
         self.optimal_weights = None
 
         # move model to correct device, save loss and instantiate the optimizer
-        print(self.device == torch.device("cuda"))
-
         if not (self.device == torch.device("cuda") or self.device == torch.device("cpu")):
-            print("hej")
             torch.cuda.set_device(self.device)
         self.model = model.to(self.device)
         self.loss_fun = loss_fun
@@ -334,7 +331,6 @@ class ModelTrainer:
                 self.save_model_w_training_settings()
                 
             epoch_t = datetime.now() - start_t
-            print(f"The epoch took: {epoch_t}, for {n_graphs} graphs.")
 
     def get_training_metrics(self):
 
