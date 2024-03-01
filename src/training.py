@@ -56,6 +56,7 @@ class ModelTrainer:
         self.optimal_weights = None
 
         # move model to correct device, save loss and instantiate the optimizer
+        torch.cuda.set_device(self.device)
         self.model = model.to(self.device)
         self.loss_fun = loss_fun
         self.optimizer = torch.optim.Adam(
