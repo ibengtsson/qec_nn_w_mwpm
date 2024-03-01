@@ -254,8 +254,8 @@ def get_batch_of_graphs(
         _, unique_counts = torch.unique(batch_labels, return_counts=True)
         cum_sum = torch.cumsum(unique_counts, dim=0)
         # low_ind = torch.cat([torch.tensor([0]), cum_sum[even_odd.astype(bool)] - 1])
-        low_ind = torch.cat([torch.tensor([0]), cum_sum[even_odd.astype(bool)]])
-        high_ind = torch.cat([cum_sum[even_odd.astype(bool)] - 1, torch.tensor([batch_labels.shape[0]])])
+        low_ind = torch.cat([torch.tensor([0], device=device), cum_sum[even_odd.astype(bool)]])
+        high_ind = torch.cat([cum_sum[even_odd.astype(bool)] - 1, torch.tensor([batch_labels.shape[0]], device=device)])
         index_remap = torch.cat([torch.ones(high - low, dtype=torch.int64) * i for i, (high, low) in enumerate(zip(high_ind, low_ind))])
         
         # add offset introduced by squeezing in virtual nodes
