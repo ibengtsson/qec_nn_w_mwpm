@@ -13,11 +13,11 @@ graph_settings:
   n_classes: 1
 training_settings:
   seed: Null
-  dataset_size: 1000000
-  validation_set_size: 10000
-  batch_size: 30000
-  warmup_epochs: 300
-  tot_epochs: 800
+  dataset_size: 1000
+  validation_set_size: 100
+  batch_size: 100
+  warmup_epochs: 3
+  tot_epochs: 10
   num_selections: 25
   #gradient_factor: 2
   search_radius: 0.5
