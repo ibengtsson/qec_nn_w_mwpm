@@ -5,6 +5,8 @@ import sys
 sys.path.append("../")
 from src.models import GraphNN, MWPMLoss, MWPMLoss_v2
 from src.training import ModelTrainer
+import os
+os.environ["QECSIM_CFG"] = "~"
 
 def main():
     
