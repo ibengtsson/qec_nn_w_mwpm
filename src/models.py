@@ -156,7 +156,7 @@ class MWPMLoss(torch.autograd.Function):
 
         gradients.requires_grad = True
 
-        return None, gradients, None, None, None, None, None
+        return None, gradients, None, None, None, None
 
 class MWPMLoss_v2(torch.autograd.Function):
 
@@ -217,7 +217,7 @@ class MWPMLoss_v2(torch.autograd.Function):
         grads, = ctx.saved_tensors
         grads.requires_grad = True
 
-        return None, grads, None, None, None, None, None
+        return None, grads, None, None, None
 
 
 class SplitSyndromes(nn.Module):
