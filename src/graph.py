@@ -256,7 +256,6 @@ def get_batch_of_graphs(
         # extend edge indices
         _, unique_counts = torch.unique(batch_labels, return_counts=True)
         cum_sum = torch.cumsum(unique_counts, dim=0)
-        # low_ind = torch.cat([torch.tensor([0]), cum_sum[even_odd.astype(bool)] - 1])
         low_ind = torch.cat(
             [torch.tensor([0], device=device), cum_sum[even_odd.astype(bool)]]
         )
