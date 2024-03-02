@@ -257,7 +257,6 @@ class ModelTrainer:
             epoch_n_graphs = 0
             epoch_n_trivial = 0
             print(f"Epoch {epoch}")
-            start_t = datetime.now()
             
             for _ in range(n_batches):
                 # simulate data as we go
