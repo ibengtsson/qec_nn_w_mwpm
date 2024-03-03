@@ -319,4 +319,7 @@ class GraphNN(nn.Module):
         edge_classes = edge_classes[range(n_edges // 2), min_inds]
         edges = edges[:, ::2]
 
+        # normalise edge_weights
+        edge_feat = torch.sigmoid(edge_feat)
+        
         return edges, edge_feat, edge_classes
