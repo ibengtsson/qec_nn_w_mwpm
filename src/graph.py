@@ -322,6 +322,10 @@ def get_batch_of_graphs(
         virtual_edges = torch.isin(edge_index, virtual_node_labels)
         virtual_edges_mask = torch.cat([torch.any(virtual_edges, dim=0)] * 2)
         dist[virtual_edges_mask] = 1
+        
+    # normalise distance
+    norm_fun = lambda x: (x - x.min()) / (x.max() - x.min())
+    dist = norm_fun(dist)
 
     # mark inner distance -1 and outer +1
     in_mark = -1 * torch.ones_like(in_dist)
