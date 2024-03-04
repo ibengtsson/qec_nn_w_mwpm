@@ -11,22 +11,22 @@ from typing import Callable
 from src.utils import parse_yaml, inference
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
+from src.models import GraphNN, MWPMLoss_v2, MWPMLoss_v3
 
 class ModelTrainer:
 
     def __init__(
         self,
-        model: nn.Module,
-        loss_fun: Callable,
         config: os.PathLike = None,
         save_model: bool = True,
     ):
 
         # load and initialise settings
-        paths, graph_settings, training_settings = parse_yaml(config)
+        paths, graph_settings, model_settings, training_settings = parse_yaml(config)
         self.save_dir = Path(paths["save_dir"])
         self.saved_model_path = paths["saved_model_path"]
         self.graph_settings = graph_settings
+        self.model_settings = model_settings
         self.training_settings = training_settings
         self.save_model = save_model
 
@@ -56,8 +56,11 @@ class ModelTrainer:
         # move model to correct device, save loss and instantiate the optimizer
         if not (self.device == torch.device("cuda") or self.device == torch.device("cpu")):
             torch.cuda.set_device(self.device)
-        self.model = model.to(self.device)
-        self.loss_fun = loss_fun
+        
+        self.model = GraphNN(
+            hidden_channels_GCN=model_settings["hidden_channels_GCN"],
+            hidden_channels_MLP=model_settings["hidden_channels_MLP"],
+            ).to(self.device)
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), lr=training_settings["warmup_lr"]
         )
@@ -233,7 +236,7 @@ class ModelTrainer:
             n_epochs = self.training_settings["warmup_epochs"]
 
         else:
-            loss_fun = self.loss_fun
+            loss_fun = MWPMLoss_v3.apply
             n_epochs = self.training_settings["tot_epochs"]
             
             # change learning rate from the warmup's
