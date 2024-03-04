@@ -55,6 +55,7 @@ class LocalSearch:
         self.noise_vector.fill_(0.)
         self.noise_vector[self.value] = self.magnitude
 
+
     def update_weights(self, model):
         nn.utils.vector_to_parameters(self.vector, model.parameters())
 
@@ -76,8 +77,9 @@ class LocalSearch:
         #print(self.vector)
         self.set_value()
         self.set_noise()
-        self.set_noise_vector()
-        self.vector[torch.from_numpy(self.value)] = self.vector[torch.from_numpy(self.value)] + torch.from_numpy(self.value)
+        #self.set_noise_vector()
+
+        self.vector[self.value] = self.vector[self.value] + self.magnitude
         self.update_weights(self.model)
         _, new_accuracy = inference(self.model,syndromes,flips, device=self.device)
         if new_accuracy > self.top_score:
