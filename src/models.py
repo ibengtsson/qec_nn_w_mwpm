@@ -39,7 +39,7 @@ def mwpm_prediction(edges, weights, classes):
         return 0
     
 def mwpm_w_grad(edges, weights, classes):
-
+    
     classes = (classes > 0).astype(np.int32)
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
@@ -58,10 +58,28 @@ def mwpm_w_grad(edges, weights, classes):
     
     gradient = torch.ones(weights.shape)
     gradient[~mask] = -1
-    if flip:
-        gradient *= -1
 
     return flip, gradient
+
+def mwpm_w_grad_v2(edges, weights, classes):
+
+    classes = (classes > 0).astype(np.int32)
+    edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
+    edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
+    edge_range = {tuple(sorted(x)): i for i, x in enumerate(edges.T)}
+    
+    matched_edges = mwpm(edges_w_weights)
+
+    # need to make sure matched_edges is sorted
+    matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
+
+    classes = np.array([edges_w_classes[edge] for edge in matched_edges])
+    flip = classes.sum() & 1 
+    match_inds = [edge_range[edge] for edge in matched_edges]
+    mask = np.zeros(weights.shape, dtype=bool)
+    mask[match_inds] = True
+
+    return flip, mask
 
 class MWPMLoss(torch.autograd.Function):
     
@@ -186,21 +204,25 @@ class MWPMLoss_v2(torch.autograd.Function):
 
         # we must loop through every graph since each one will have given a new set of edge weights
         preds = []
-        grads = torch.zeros_like(edge_weights)
+        grads = torch.zeros_like(edge_weights, device="cpu")
 
-        for edges, weights, classes, edge_map in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph):
+        for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
             edges = edges.cpu().numpy()
             weights = weights.cpu().numpy()
             classes = classes.cpu().numpy()
 
             prediction, gradients = mwpm_w_grad(edges, weights, classes)
             preds.append(prediction)
-            grads[edge_map] = gradients.to(grads.device)
+            
+            # if prediction is wrong, flip direction of gradient
+            if prediction != label:
+                gradients *= -1
+            
+            grads[edge_map] = gradients
 
-
+        grads = grads.to(edge_weights.device)
         preds = np.array(preds)
-
-        # compute accuracy
+        
         n_correct = (preds == labels).sum()
         accuracy = n_correct / labels.shape[0]
         loss = torch.tensor(1 - accuracy, requires_grad=True)
@@ -218,6 +240,69 @@ class MWPMLoss_v2(torch.autograd.Function):
         grads.requires_grad = True
 
         return None, grads, None, None, None
+    
+class MWPMLoss_v3(torch.autograd.Function):
+
+    # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
+    @staticmethod
+    def forward(
+        ctx,
+        edge_indx: torch.Tensor,
+        edge_weights: torch.Tensor,
+        edge_classes: torch.Tensor,
+        batch_labels: torch.Tensor,
+        labels: np.ndarray,
+    ):
+
+        loss_fun = torch.nn.MSELoss()
+        edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
+        # split edges and edge weights per syndrome
+        (
+            edges_p_graph,
+            weights_p_graph,
+            classes_p_graph,
+            edge_map_p_graph,
+        ) = extract_edges(
+            edge_indx,
+            edge_attr,
+            batch_labels,
+        )
+
+        # we must loop through every graph since each one will have given a new set of edge weights
+        desired_weights = torch.zeros_like(edge_weights, device="cpu")
+
+        for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
+            edges = edges.cpu().numpy()
+            weights = weights.cpu().numpy()
+            classes = classes.cpu().numpy()
+
+            prediction, match_mask = mwpm_w_grad_v2(edges, weights, classes)
+        
+            if prediction == label:
+                weights[match_mask] *= 0.5
+                weights[~match_mask] *= 1.5
+            else:
+                weights[match_mask] *= 1.5
+                weights[~match_mask] *= 0.5
+                
+            desired_weights[edge_map] = torch.tensor(weights)
+
+        desired_weights = desired_weights.to(edge_weights.device)
+        
+        loss = loss_fun(edge_weights, desired_weights)
+        ctx.save_for_backward(edge_weights, desired_weights)
+        
+        return loss
+
+    @staticmethod
+    def backward(
+        ctx,
+        grad_output,
+    ):
+        edge_weights, desired_edge_weights = ctx.saved_tensors
+        grad = (edge_weights - desired_edge_weights) / edge_weights.shape[0]
+        
+        return None, grad, None, None, None
 
 
 class SplitSyndromes(nn.Module):
