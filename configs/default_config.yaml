@@ -1,6 +1,16 @@
 paths:
   save_dir: ../training_outputs/
   saved_model_path: 
+model_settings:
+  hidden_channels_GCN: 
+    - 32
+    - 128
+    - 256
+    - 512
+  hidden_channels_MLP: 
+    - 256
+    - 128
+    - 64
 graph_settings:
   experiment: "z"
   code_size: 5
