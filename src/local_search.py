@@ -32,7 +32,7 @@ class LocalSearch:
         """
         self.check_idx()
         choices = self.running_idxs[self.idx:self.idx+self.num_selections]
-        self.value = choices
+        self.value = torch.from_numpy(choices)
         self.value = self.value.to(self.device)
         self.idx+=self.num_selections
 
