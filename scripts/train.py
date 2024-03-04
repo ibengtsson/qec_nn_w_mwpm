@@ -6,7 +6,7 @@ sys.path.append("../")
 from src.models import GraphNN
 from src.training import LSTrainer
 import os
-os.environ["QECSIM_CFG"] = "/cephyr/users/isakbe/Alvis"
+os.environ["QECSIM_CFG"] = "/cephyr/users/fridafj/Alvis"
 
 
 def main():
