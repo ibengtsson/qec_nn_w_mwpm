@@ -349,7 +349,7 @@ class LSTrainer:
             _,top_accuracy = inference(self.model,syndromes,flips, device=self.device)
             ls.top_score = top_accuracy
             for _ in range(n_batches):
-                ls.step(syndromes,flips,self.device)
+                ls.step(syndromes,flips)
             
 
             # update model to best version after local search
