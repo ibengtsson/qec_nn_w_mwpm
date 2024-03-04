@@ -346,10 +346,10 @@ class LSTrainer:
             epoch_n_trivial = n_trivial
             n_graphs = syndromes.shape[0]
             start_t = datetime.now()
-            _,top_accuracy = inference(self.model,syndromes,flips)
+            _,top_accuracy = inference(self.model,syndromes,flips, device=self.device)
             ls.top_score = top_accuracy
             for _ in range(n_batches):
-                ls.step(syndromes,flips)
+                ls.step(syndromes,flips,self.device)
             
 
             # update model to best version after local search

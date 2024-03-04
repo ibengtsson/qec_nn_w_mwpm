@@ -70,14 +70,14 @@ class LocalSearch:
             elite_vals = self.elite[self.value]
             self.vector[self.value] = elite_vals
 
-    def step(self,syndromes,flips):
+    def step(self,syndromes,flips, device):
         #print(self.vector)
         self.set_value()
         self.set_noise()
         self.set_noise_vector()
         self.vector[torch.from_numpy(self.value)] = self.vector[torch.from_numpy(self.value)] + torch.from_numpy(self.value)
         self.update_weights(self.model)
-        _, new_accuracy = inference(self.model,syndromes,flips)
+        _, new_accuracy = inference(self.model,syndromes,flips, device=device)
         if new_accuracy > self.top_score:
             self.set_elite()
             self.top_score = new_accuracy
