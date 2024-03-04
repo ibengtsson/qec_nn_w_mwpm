@@ -2,7 +2,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch_geometric.nn as nng
-from torch_geometric.utils import sort_edge_index
+from torch_geometric.utils import sort_edge_index, softmax
 import numpy as np
 from qecsim.graphtools import mwpm
 from src.graph import extract_edges
@@ -280,10 +280,10 @@ class MWPMLoss_v3(torch.autograd.Function):
         
             if prediction == label:
                 weights[match_mask] *= 0.8
-                weights[~match_mask] *= 1.2
+                # weights[~match_mask] *= 1.2
             else:
                 weights[match_mask] *= 1.2
-                weights[~match_mask] *= 0.8
+                # weights[~match_mask] *= 0.8
                 
             desired_weights[edge_map] = torch.tensor(weights)
 
@@ -371,6 +371,7 @@ class GraphNN(nn.Module):
         edges,
         edge_attr,
         detector_labels,
+        batch_labels,
         warmup=False,
     ):
 
@@ -407,7 +408,10 @@ class GraphNN(nn.Module):
         edge_classes = edge_classes[range(n_edges // 2), min_inds]
         edges = edges[:, ::2]
 
-        # normalise edge_weights
-        edge_feat = torch.sigmoid(edge_feat)
+        # normalise edge_weights per graph
+        edge_batch = batch_labels[edges[0]]
+        edge_feat = softmax(edge_feat, edge_batch)
+        
+        # edge_feat = torch.sigmoid(edge_feat)
         
         return edges, edge_feat, edge_classes
