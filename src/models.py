@@ -92,7 +92,7 @@ class MWPMLoss(torch.autograd.Function):
         edge_classes: torch.Tensor,
         batch_labels: torch.Tensor,
         labels: np.ndarray,
-        factor: float = 1.5,
+        factor: float = 2,
     ):
 
         edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
@@ -361,6 +361,9 @@ class GraphNN(nn.Module):
 
         # Layer to split syndrome into X (Z)-graphs
         self.split_syndromes = SplitSyndromes()
+        
+        # Activation function
+        self.activation = torch.nn.ReLU()
 
     def forward(
         self,
@@ -374,7 +377,7 @@ class GraphNN(nn.Module):
         w = edge_attr[:, 0] * edge_attr[:, 1]
         for layer in self.graph_layers:
             x = layer(x, edges, w)
-            x = torch.tanh(x)
+            x = self.activation(x)
         
         # split syndromes so only X (Z) nodes remain and create an edge embedding
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
@@ -384,7 +387,7 @@ class GraphNN(nn.Module):
         # send the edge features through linear layers
         for layer in self.dense_layers:
             edge_feat = layer(edge_feat)
-            edge_feat = torch.tanh(edge_feat)
+            edge_feat = self.activation(edge_feat)
         
         # output
         edge_feat = self.output_layer(edge_feat)
