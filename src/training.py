@@ -11,7 +11,7 @@ from typing import Callable
 from src.utils import parse_yaml, inference
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import GraphNN, MWPMLoss_v2, MWPMLoss_v3
+from src.models import GraphNN, MWPMLoss, MWPMLoss_v2, MWPMLoss_v3
 
 class ModelTrainer:
 
@@ -255,12 +255,16 @@ class ModelTrainer:
         val_syndromes, val_flips, n_val_identities = self.create_test_set(
             n_graphs=n_val_graphs,
         )
+        
+        before = list(self.model.parameters())[0].clone()
         for epoch in range(current_epoch, n_epochs):
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
             print(f"Epoch {epoch}")
-            
+            diff = torch.mean(before - list(self.model.parameters())[0])
+            before = list(self.model.parameters())[0].clone()
+            print(diff)
             for _ in range(n_batches):
                 # simulate data as we go
                 sim = random.choice(sims)
