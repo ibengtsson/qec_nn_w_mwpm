@@ -44,6 +44,10 @@ def parse_yaml(yaml_config):
             "power": 2,
             "n_classes": 1,
         }
+        config["model_settings"] = {
+            "hidden_channels_GCN": [32, 64, 128, 256, 512],
+            "hidden_channels_MLP": [256, 128, 64],
+        }
         device = "cuda" if torch.cuda.is_available() else "cpu"
         config["training_settings"] = {
             "seed": None,
@@ -63,9 +67,10 @@ def parse_yaml(yaml_config):
     # read settings into variables
     paths = config["paths"]
     graph_settings = config["graph_settings"]
+    model_settings = config["model_settings"]
     training_settings = config["training_settings"]
 
-    return paths, graph_settings, training_settings
+    return paths, graph_settings, model_settings, training_settings
 
 
 def inference(
