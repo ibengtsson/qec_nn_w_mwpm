@@ -87,7 +87,7 @@ def inference(
         syndromes, m_nearest_nodes, experiment=experiment, device=device
     )
     edge_index, edge_weights, edge_classes = model(
-        x, edge_index, edge_attr, detector_labels
+        x, edge_index, edge_attr, detector_labels, batch_labels,
     )
 
     if pool:
