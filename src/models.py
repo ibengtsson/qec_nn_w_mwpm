@@ -3,21 +3,13 @@ import torch
 import torch.nn as nn
 import torch_geometric.nn as nng
 from torch_geometric.utils import sort_edge_index
-from scipy.spatial.distance import cdist
 import numpy as np
 from qecsim.graphtools import mwpm
 from src.graph import extract_edges
-from signal import signal, SIGINT
-import sys
-# from src.utils import inference
-
-def handler(signalnum, frame):
-    sys.exit(0)
 
 
 def mwpm_prediction(edges, weights, classes):
 
-    signal(SIGINT, handler)
     # convert edges to dict
     if np.unique(edges).shape[0] % 2 != 0:
         print("Odd edges")
@@ -47,7 +39,7 @@ def mwpm_prediction(edges, weights, classes):
         return 0
     
 def mwpm_w_grad(edges, weights, classes):
-
+    
     classes = (classes > 0).astype(np.int32)
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
@@ -66,10 +58,28 @@ def mwpm_w_grad(edges, weights, classes):
     
     gradient = torch.ones(weights.shape)
     gradient[~mask] = -1
-    if flip:
-        gradient *= -1
 
     return flip, gradient
+
+def mwpm_w_grad_v2(edges, weights, classes):
+
+    classes = (classes > 0).astype(np.int32)
+    edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
+    edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
+    edge_range = {tuple(sorted(x)): i for i, x in enumerate(edges.T)}
+    
+    matched_edges = mwpm(edges_w_weights)
+
+    # need to make sure matched_edges is sorted
+    matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
+
+    classes = np.array([edges_w_classes[edge] for edge in matched_edges])
+    flip = classes.sum() & 1 
+    match_inds = [edge_range[edge] for edge in matched_edges]
+    mask = np.zeros(weights.shape, dtype=bool)
+    mask[match_inds] = True
+
+    return flip, mask
 
 class MWPMLoss(torch.autograd.Function):
     
@@ -82,7 +92,7 @@ class MWPMLoss(torch.autograd.Function):
         edge_classes: torch.Tensor,
         batch_labels: torch.Tensor,
         labels: np.ndarray,
-        factor: float = 1.5,
+        factor: float = 2,
     ):
 
         edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
@@ -164,7 +174,7 @@ class MWPMLoss(torch.autograd.Function):
 
         gradients.requires_grad = True
 
-        return None, gradients, None, None, None, None, None
+        return None, gradients, None, None, None, None
 
 class MWPMLoss_v2(torch.autograd.Function):
 
@@ -194,21 +204,25 @@ class MWPMLoss_v2(torch.autograd.Function):
 
         # we must loop through every graph since each one will have given a new set of edge weights
         preds = []
-        grads = torch.zeros_like(edge_weights)
+        grads = torch.zeros_like(edge_weights, device="cpu")
 
-        for edges, weights, classes, edge_map in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph):
+        for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
             edges = edges.cpu().numpy()
             weights = weights.cpu().numpy()
             classes = classes.cpu().numpy()
 
             prediction, gradients = mwpm_w_grad(edges, weights, classes)
             preds.append(prediction)
-            grads[edge_map] = gradients.to(grads.device)
+            
+            # if prediction is wrong, flip direction of gradient
+            if prediction != label:
+                gradients *= -1
+            
+            grads[edge_map] = gradients
 
-
+        grads = grads.to(edge_weights.device)
         preds = np.array(preds)
-
-        # compute accuracy
+        
         n_correct = (preds == labels).sum()
         accuracy = n_correct / labels.shape[0]
         loss = torch.tensor(1 - accuracy, requires_grad=True)
@@ -225,7 +239,70 @@ class MWPMLoss_v2(torch.autograd.Function):
         grads, = ctx.saved_tensors
         grads.requires_grad = True
 
-        return None, grads, None, None, None, None, None
+        return None, grads, None, None, None
+    
+class MWPMLoss_v3(torch.autograd.Function):
+
+    # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
+    @staticmethod
+    def forward(
+        ctx,
+        edge_indx: torch.Tensor,
+        edge_weights: torch.Tensor,
+        edge_classes: torch.Tensor,
+        batch_labels: torch.Tensor,
+        labels: np.ndarray,
+    ):
+
+        loss_fun = torch.nn.MSELoss()
+        edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
+        # split edges and edge weights per syndrome
+        (
+            edges_p_graph,
+            weights_p_graph,
+            classes_p_graph,
+            edge_map_p_graph,
+        ) = extract_edges(
+            edge_indx,
+            edge_attr,
+            batch_labels,
+        )
+
+        # we must loop through every graph since each one will have given a new set of edge weights
+        desired_weights = torch.zeros_like(edge_weights, device="cpu")
+
+        for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
+            edges = edges.cpu().numpy()
+            weights = weights.cpu().numpy()
+            classes = classes.cpu().numpy()
+
+            prediction, match_mask = mwpm_w_grad_v2(edges, weights, classes)
+        
+            if prediction == label:
+                weights[match_mask] *= 0.8
+                weights[~match_mask] *= 1.2
+            else:
+                weights[match_mask] *= 1.2
+                weights[~match_mask] *= 0.8
+                
+            desired_weights[edge_map] = torch.tensor(weights)
+
+        desired_weights = desired_weights.to(edge_weights.device)
+        
+        loss = loss_fun(edge_weights, desired_weights)
+        ctx.save_for_backward(edge_weights, desired_weights)
+        
+        return loss
+
+    @staticmethod
+    def backward(
+        ctx,
+        grad_output,
+    ):
+        edge_weights, desired_edge_weights = ctx.saved_tensors
+        grad = (edge_weights - desired_edge_weights) / edge_weights.shape[0]
+        
+        return None, grad, None, None, None
 
 
 class SplitSyndromes(nn.Module):
@@ -242,6 +319,11 @@ class SplitSyndromes(nn.Module):
         edges = edges[:, valid_labels]
         edge_attr = edge_attr[valid_labels, :]
 
+        # now we want to remove the pairs (0-1, 1-0 etc)
+        mask = edges[0, :] > edges[1, :]
+        ind_range = torch.arange(edges.shape[1]).to(edges.device)
+        edges, edge_attr = sort_edge_index(edges[:, ind_range[mask]], edge_attr[mask, :])
+        
         return edges, edge_attr
 
 
@@ -279,6 +361,9 @@ class GraphNN(nn.Module):
 
         # Layer to split syndrome into X (Z)-graphs
         self.split_syndromes = SplitSyndromes()
+        
+        # Activation function
+        self.activation = torch.nn.ReLU()
 
     def forward(
         self,
@@ -292,7 +377,7 @@ class GraphNN(nn.Module):
         w = edge_attr[:, 0] * edge_attr[:, 1]
         for layer in self.graph_layers:
             x = layer(x, edges, w)
-            x = torch.tanh(x)
+            x = self.activation(x)
         
         # split syndromes so only X (Z) nodes remain and create an edge embedding
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
@@ -302,7 +387,7 @@ class GraphNN(nn.Module):
         # send the edge features through linear layers
         for layer in self.dense_layers:
             edge_feat = layer(edge_feat)
-            edge_feat = torch.tanh(edge_feat)
+            edge_feat = self.activation(edge_feat)
         
         # output
         edge_feat = self.output_layer(edge_feat)
@@ -322,94 +407,7 @@ class GraphNN(nn.Module):
         edge_classes = edge_classes[range(n_edges // 2), min_inds]
         edges = edges[:, ::2]
 
-        return edges, edge_feat, edge_classes
-
-    
-
-# class LocalSearch:
-#     def __init__(self, model, search_radius, num_selections):
-#         self.model = model
-#         self.initial_score = torch.tensor(float(0))
-#         self.top_score = self.initial_score
-#         self.target = None
-#         self.vector = torch.nn.utils.parameters_to_vector(model.parameters())
-#         self.elite = self.vector.clone()
-#         self.n = self.vector.numel()
-#         self.running_idxs = np.arange(self.n)
-#         np.random.shuffle(self.running_idxs)
-#         self.idx = 0
-#         self.value = []  # list of indices
-#         self.num_selections = num_selections
-#         self.magnitude = torch.empty(self.num_selections,
-#                                 dtype=self.vector.dtype,
-#                                 device=self.vector.device)
-#         self.noise_vector = torch.empty_like(self.vector)
-#         self.jumped = False
-#         self.search_radius = search_radius
-
-#     def set_value(self):
-#         """Use the numpy choices function (which has no equivalent in Pytorch)
-#         to generate a sample from the array of indices. The sample size and
-#         distribution are dynamically updated by the algorithm's state.
-#         """
-#         self.check_idx()
-#         choices = self.running_idxs[self.idx:self.idx+self.num_selections]
-#         self.value = choices
-#         self.idx+=self.num_selections
-
-#     def check_idx(self):
-#         if (self.idx+self.num_selections)>self.n:
-#             self.idx=0
-#             np.random.shuffle(self.running_idxs)
-
-#     def set_noise(self):
-#         # Cast to precision and CUDA, and edit shape
-#         # search radius can be adjusted to fit scale of noise
-#         self.magnitude.uniform_(-self.search_radius, self.search_radius).squeeze()
-
-#     def set_noise_vector(self):
-#         """ This function defines a noise tensor, and returns it. The noise
-#         tensor needs to be the same shape as our originial vecotr. Hence, a
-#         "basis" tensor is created with zeros, then the chosen indices are
-#         modified.
-#         """
-#         self.noise_vector.fill_(0.)
-#         self.noise_vector[self.value] = self.magnitude
-
-#     def update_weights(self, model):
-#         nn.utils.vector_to_parameters(self.vector, model.parameters())
-
-#     def set_elite(self):
-#         self.jumped = False
-#         self.elite[self.value] = self.vector[self.value]
-#             #self.elite.clamp_(-0.9, 0.9)
-#             #self.elite.copy_(self.vector)
-#         self.jumped = True
-#             #self.frustration.reset_state()
+        # normalise edge_weights
+        edge_feat = torch.sigmoid(edge_feat)
         
-#     def set_vector(self):
-#         if not self.jumped:
-#             #self.vector.copy_(self.elite)
-#             elite_vals = self.elite[self.value]
-#             self.vector[self.value] = elite_vals
-
-#     def step(self,syndromes,flips):
-#         #print(self.vector)
-#         self.set_value()
-#         self.set_noise()
-#         self.set_noise_vector()
-#         self.vector[torch.from_numpy(self.value)] = self.vector[torch.from_numpy(self.value)] + torch.from_numpy(self.value)
-#         self.update_weights(self.model)
-#         _, new_accuracy = inference(self.model,syndromes,flips)
-#         if new_accuracy > self.top_score:
-#             self.set_elite()
-#             self.top_score = new_accuracy
-#         else:
-#             self.set_vector()
-#         self.idx += 1
-#             # decay to escape local maxima
-#             #self.top_score -= 0.002
-
-
-#     def return_topscore(self):
-#         return self.top_score
+        return edges, edge_feat, edge_classes
