@@ -279,11 +279,11 @@ class MWPMLoss_v3(torch.autograd.Function):
             prediction, match_mask = mwpm_w_grad_v2(edges, weights, classes)
         
             if prediction == label:
-                weights[match_mask] *= 0.5
-                weights[~match_mask] *= 1.5
+                weights[match_mask] *= 0.8
+                weights[~match_mask] *= 1.2
             else:
-                weights[match_mask] *= 1.5
-                weights[~match_mask] *= 0.5
+                weights[match_mask] *= 1.2
+                weights[~match_mask] *= 0.8
                 
             desired_weights[edge_map] = torch.tensor(weights)
 
