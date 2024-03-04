@@ -4,8 +4,9 @@ import numpy as np
 from src.utils import inference
 
 class LocalSearch:
-    def __init__(self, model, search_radius, num_selections):
+    def __init__(self, model, search_radius, num_selections, device):
         self.model = model
+        self.device = device
         self.initial_score = torch.tensor(float(0))
         self.top_score = self.initial_score
         self.target = None
@@ -32,6 +33,7 @@ class LocalSearch:
         self.check_idx()
         choices = self.running_idxs[self.idx:self.idx+self.num_selections]
         self.value = choices
+        self.value = self.value.to(self.device)
         self.idx+=self.num_selections
 
     def check_idx(self):
@@ -70,14 +72,14 @@ class LocalSearch:
             elite_vals = self.elite[self.value]
             self.vector[self.value] = elite_vals
 
-    def step(self,syndromes,flips, device):
+    def step(self,syndromes,flips):
         #print(self.vector)
         self.set_value()
         self.set_noise()
         self.set_noise_vector()
         self.vector[torch.from_numpy(self.value)] = self.vector[torch.from_numpy(self.value)] + torch.from_numpy(self.value)
         self.update_weights(self.model)
-        _, new_accuracy = inference(self.model,syndromes,flips, device=device)
+        _, new_accuracy = inference(self.model,syndromes,flips, device=self.device)
         if new_accuracy > self.top_score:
             self.set_elite()
             self.top_score = new_accuracy

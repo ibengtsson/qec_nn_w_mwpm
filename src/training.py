@@ -324,7 +324,7 @@ class LSTrainer:
         search_radius = self.training_settings["search_radius"]
         num_selections = self.training_settings["num_selections"]
         # training optimizer
-        ls = LocalSearch(self.model, search_radius, num_selections)        
+        ls = LocalSearch(self.model, search_radius, num_selections, self.device)        
 
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
