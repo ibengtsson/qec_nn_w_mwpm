@@ -1,9 +1,7 @@
 from pathlib import Path
-import torch
 import argparse
 import sys
 sys.path.append("../")
-from src.models import GraphNN, MWPMLoss, MWPMLoss_v2
 from src.training import ModelTrainer
 import os
 os.environ["QECSIM_CFG"] = "/cephyr/users/isakbe/Alvis"
@@ -16,9 +14,7 @@ def main():
     parser.add_argument("-s", "--save", required=False, action="store_true")
     args = parser.parse_args() 
     
-    # create a model
-    model = GraphNN()
-    loss_fun = MWPMLoss_v2.apply
+    # get a config
     config = Path(args.configuration)
     
     # check if model should be saved
@@ -30,7 +26,7 @@ def main():
         print("Model will not be saved.")
     
     # train model
-    trainer = ModelTrainer(model, loss_fun, config=config, save_model=save_or_not)
+    trainer = ModelTrainer(config=config, save_model=save_or_not)
     trainer.train(warmup=True)
     trainer.train()
     
