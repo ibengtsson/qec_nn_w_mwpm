@@ -325,7 +325,7 @@ def get_batch_of_graphs(
         
     # normalise distance
     norm_fun = lambda x: (x - x.min()) / (x.max() - x.min())
-    dist = norm_fun(dist)
+    # dist = norm_fun(dist)
 
     # mark inner distance -1 and outer +1
     in_mark = -1 * torch.ones_like(in_dist)
