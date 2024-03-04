@@ -205,8 +205,10 @@ class ModelTrainer:
 
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
         n_correct_preds = 0
+        n_syndromes = 0
         for syndrome, flip in zip(syndromes, flips):
-
+            
+            n_syndromes += syndrome.shape[0]
             _n_correct_preds, _ = inference(
                 self.model,
                 syndrome,
@@ -216,8 +218,8 @@ class ModelTrainer:
                 device=self.device,
             )
             n_correct_preds += _n_correct_preds
-
-        val_accuracy = (n_correct_preds + n_identities) / n_graphs
+        val_accuracy = (n_correct_preds) / n_syndromes
+        # val_accuracy = (n_correct_preds + n_identities) / n_graphs
 
         return val_accuracy
 
@@ -256,15 +258,12 @@ class ModelTrainer:
             n_graphs=n_val_graphs,
         )
         
-        before = list(self.model.parameters())[0].clone()
         for epoch in range(current_epoch, n_epochs):
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
             print(f"Epoch {epoch}")
-            diff = torch.mean(before - list(self.model.parameters())[0])
-            before = list(self.model.parameters())[0].clone()
-            print(diff)
+
             for _ in range(n_batches):
                 # simulate data as we go
                 sim = random.choice(sims)
@@ -291,12 +290,13 @@ class ModelTrainer:
                         edge_index,
                         edge_attr,
                         detector_labels,
+                        batch_labels,
                         warmup=warmup,
                     )
                     loss = loss_fun(edge_weights, label)
                 else:
                     edge_index, edge_weights, edge_classes = self.model(
-                        x, edge_index, edge_attr, detector_labels
+                        x, edge_index, edge_attr, detector_labels, batch_labels,
                     )
                     loss = loss_fun(
                         edge_index,
