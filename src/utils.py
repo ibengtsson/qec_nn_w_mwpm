@@ -91,10 +91,18 @@ def inference(
         )
     else:
         preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
-
+    print("preds",np.count_nonzero(preds))
+    print("flips",np.count_nonzero(flips))
+    TP = np.sum(np.logical_and(preds == 1, flips == 1))
+    TN = np.sum(np.logical_and(preds == 0, flips == 0))
+    FP = np.sum(np.logical_and(preds == 1, flips == 0))
+    FN = np.sum(np.logical_and(preds == 0, flips == 1))
+    sens = TP/(TP+FN)
+    spec = TN/(TN+FP)
+    bal_acc = (sens+spec)/2
     n_correct = (preds == flips).sum()
     accuracy = n_correct / len(preds)
-    return n_correct, accuracy
+    return n_correct, bal_acc
 
 
 def predict_mwpm(
