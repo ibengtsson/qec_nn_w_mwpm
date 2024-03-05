@@ -296,7 +296,9 @@ class MWPMLoss_v3(torch.autograd.Function):
                 _desired_weights[~match_mask] = 1
             else:
                 _desired_weights[match_mask] = 1
-            
+            print(desired_weights.device)
+            print(class_balancer.device)
+            print(edge_map.device)
             desired_weights[edge_map] = _desired_weights
             class_balancer[edge_map] *= class_weight[label]
 
