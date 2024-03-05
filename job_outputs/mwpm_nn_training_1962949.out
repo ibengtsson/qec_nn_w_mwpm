@@ -1,3 +1,0 @@
-This job can be monitored from: https://scruffy.c3se.chalmers.se/d/alvis-job/alvis-job?var-jobid=1962949&from=1708701029000
-Using config file: ../configs/default_config.yaml
-slurmstepd: error: *** JOB 1962949 ON alvis6-02 CANCELLED AT 2024-02-23T16:10:40 ***

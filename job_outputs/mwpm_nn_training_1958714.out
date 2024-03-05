@@ -1,3 +1,0 @@
-This job can be monitored from: https://scruffy.c3se.chalmers.se/d/alvis-job/alvis-job?var-jobid=1958714&from=1708601923000
-usage: train.py [-h] -c CONFIGURATION
-train.py: error: argument -c/--configuration: expected one argument
