@@ -56,8 +56,8 @@ def mwpm_w_grad(edges, weights, classes):
     mask = np.zeros(weights.shape, dtype=bool)
     mask[match_inds] = True
     
-    gradient = torch.ones(weights.shape)
-    gradient[~mask] = -1
+    gradient = torch.zeros(weights.shape)
+    gradient[mask] = 1
 
     return flip, gradient
 
