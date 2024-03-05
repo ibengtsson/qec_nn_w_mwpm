@@ -303,7 +303,8 @@ class MWPMLoss_v3(torch.autograd.Function):
         desired_weights = desired_weights.to(edge_weights.device)
         class_balancer = class_balancer.to(edge_weights.device)
         
-        loss = loss_fun(edge_weights, desired_weights)
+        loss = ((edge_weights - desired_weights) ** 2 * class_balancer).mean()
+        # loss = loss_fun(edge_weights, desired_weights)
         ctx.save_for_backward(edge_weights, desired_weights, class_balancer)
         
         return loss
@@ -317,6 +318,8 @@ class MWPMLoss_v3(torch.autograd.Function):
         grad = -(edge_weights - desired_edge_weights) / edge_weights.shape[0]
         grad = grad * class_balancer
         grad.requires_grad = True
+        
+        grad = torch.ones_like(edge_weights, requires_grad=True)
         return None, grad, None, None, None
 
 
