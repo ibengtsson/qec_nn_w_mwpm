@@ -288,6 +288,7 @@ class MWPMLoss_v3(torch.autograd.Function):
             edges = edges.cpu().numpy()
             weights = weights.cpu().numpy()
             classes = classes.cpu().numpy()
+            edge_map = edge_map.cpu()
 
             prediction, match_mask = mwpm_w_grad_v2(edges, weights, classes)
 
