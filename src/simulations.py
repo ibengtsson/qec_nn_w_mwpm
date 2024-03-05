@@ -5,7 +5,7 @@ from src.graph import get_3D_graph
 
 
 class QECCodeSim:
-    def __init__(self, repetitions, distance, p, n_shots, code_task, seed):
+    def __init__(self, repetitions, distance, p, n_shots, code_task):
         self.distance = distance
         self.repetitions = repetitions
         self.p = p
@@ -21,7 +21,7 @@ class QECCodeSim:
             before_round_data_depolarization=p,
         )
 
-        self.compiled_sampler = self.circuit.compile_detector_sampler(seed=seed)
+        # self.compiled_sampler = self.circuit.compile_detector_sampler(seed=seed)
         detector_coords, detector_indx = self.get_detector_coords()
         self.det_coords = detector_coords
         self.detector_indx = detector_indx
@@ -55,10 +55,12 @@ class QECCodeSim:
         
         return det_coords, detectors
 
-    def sample_syndromes(self, n_shots=None):
+    def sample_syndromes(self, seed=None, n_shots=None):
+        
+        sampler = self.circuit.compile_detector_sampler(seed=seed)
         if n_shots == None:
             n_shots = self.n_shots
-        stim_data, observable_flips = self.compiled_sampler.sample(
+        stim_data, observable_flips = sampler.sample(
             shots=n_shots,
             separate_observables=True,
         )
@@ -99,9 +101,8 @@ class SurfaceCodeSim(QECCodeSim):
         p,
         n_shots,
         code_task="surface_code:rotated_memory_z",
-        seed=None,
     ):
-        super().__init__(repetitions, distance, p, n_shots, code_task, seed)
+        super().__init__(repetitions, distance, p, n_shots, code_task)
         self.code_task = code_task
 
     def syndrome_mask(self):
@@ -115,8 +116,8 @@ class SurfaceCodeSim(QECCodeSim):
 
         return np.dstack([syndrome_x + syndrome_z] * (self.repetitions + 1))
 
-    def generate_syndromes(self, use_for_mwpm=False, n_syndromes=None, n_shots=None):
-        stabilizer_changes, flips, n_trivial_preds = super().sample_syndromes(n_shots)
+    def generate_syndromes(self, use_for_mwpm=False, seed=None, n_syndromes=None, n_shots=None):
+        stabilizer_changes, flips, n_trivial_preds = super().sample_syndromes(seed, n_shots)
 
         mask = np.repeat(
             self.syndrome_mask()[None, ...], stabilizer_changes.shape[0], 0
@@ -161,6 +162,7 @@ class SurfaceCodeSim(QECCodeSim):
         self,
         m_nearest_nodes,
         power,
+        seed=None,
     ):
         """
         Generates a batch of graphs from a list of stim experiments.
@@ -169,7 +171,7 @@ class SurfaceCodeSim(QECCodeSim):
         stim_data_list = []
         observable_flips_list = []
 
-        stim_data, observable_flips, n_trivial = self.sample_syndromes(self.n_shots)
+        stim_data, observable_flips, n_trivial = self.sample_syndromes(seed, self.n_shots)
         mask = self.syndrome_mask()
         detector_coordinates = self.get_detector_coords()
 

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 import random
+random.seed(0)
 from typing import Callable
 
 from src.utils import parse_yaml, inference
@@ -21,6 +22,9 @@ class ModelTrainer:
         save_model: bool = True,
     ):
 
+        # set seed
+        torch.manual_seed(111)
+        
         # load and initialise settings
         paths, graph_settings, model_settings, training_settings = parse_yaml(config)
         self.save_dir = Path(paths["save_dir"])
@@ -176,7 +180,8 @@ class ModelTrainer:
         syndromes = []
         flips = []
         n_identities = 0
-        for p in error_rates:
+        seed = 0
+        for i, p in enumerate(error_rates):
             sim = SurfaceCodeSim(
                 reps,
                 code_size,
@@ -184,7 +189,7 @@ class ModelTrainer:
                 int(n_graphs / n),
                 code_task=code_task,
             )
-            syndrome, flip, n_id = sim.generate_syndromes(use_for_mwpm=True)
+            syndrome, flip, n_id = sim.generate_syndromes(use_for_mwpm=True, seed=seed+i)
             syndromes.append(syndrome)
             flips.append(flip)
             n_identities += n_id
@@ -209,7 +214,7 @@ class ModelTrainer:
         for syndrome, flip in zip(syndromes, flips):
             
             n_syndromes += syndrome.shape[0]
-            _n_correct_preds, _ = inference(
+            _n_correct_preds = inference(
                 self.model,
                 syndrome,
                 flip,
@@ -238,7 +243,7 @@ class ModelTrainer:
             n_epochs = self.training_settings["warmup_epochs"]
 
         else:
-            loss_fun = MWPMLoss_v2.apply
+            loss_fun = MWPMLoss_v3.apply
             n_epochs = self.training_settings["tot_epochs"]
             
             # change learning rate from the warmup's
@@ -264,10 +269,11 @@ class ModelTrainer:
             epoch_n_trivial = 0
             print(f"Epoch {epoch}")
 
-            for _ in range(n_batches):
+            seed = 0
+            for i in range(n_batches):
                 # simulate data as we go
                 sim = random.choice(sims)
-                syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True)
+                syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True, seed=seed + i)
                 epoch_n_trivial += n_trivial
                 x, edge_index, edge_attr, batch_labels, detector_labels = (
                     get_batch_of_graphs(

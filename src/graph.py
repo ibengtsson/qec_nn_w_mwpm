@@ -303,6 +303,10 @@ def get_batch_of_graphs(
 
         # sort edge index
         edge_index = sort_edge_index(edge_index)
+    
+    else:
+        # make sure the indices are sorted in both cases
+        edge_index = sort_edge_index(edge_index)
 
     # compute edge attributes (we'll have one edge for inner-distance and one for outer-distance)
     wrap_axis = {"x": 1, "z": 0}
