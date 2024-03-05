@@ -33,4 +33,3 @@ training_settings:
   resume_training: False
   current_epoch: 0
   comment: "Not nested, no accuracy scaling in loss"
-
