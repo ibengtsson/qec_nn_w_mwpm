@@ -238,7 +238,7 @@ class ModelTrainer:
             n_epochs = self.training_settings["warmup_epochs"]
 
         else:
-            loss_fun = MWPMLoss_v3.apply
+            loss_fun = MWPMLoss_v2.apply
             n_epochs = self.training_settings["tot_epochs"]
             
             # change learning rate from the warmup's
