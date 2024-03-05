@@ -7,6 +7,9 @@ import numpy as np
 from qecsim.graphtools import mwpm
 from src.graph import extract_edges
 
+import warnings
+warnings.filterwarnings('ignore', module='qecsim')
+
 
 def mwpm_prediction(edges, weights, classes):
 
@@ -293,10 +296,13 @@ class MWPMLoss_v3(torch.autograd.Function):
             prediction, match_mask = mwpm_w_grad_v2(edges, weights, classes)
 
             _desired_weights = torch.zeros(weights.shape)
+            n_edges = edges.shape[1]
+            n_edges_in_match = match_mask.sum()
+            norm = (n_edges - n_edges_in_match) if (n_edges - n_edges_in_match) != 0 else 1
             if prediction == label:
-                _desired_weights[~match_mask] = 1
+                _desired_weights[~match_mask] = 1 / norm
             else:
-                _desired_weights[match_mask] = 1
+                _desired_weights[match_mask] = 1 / norm
                 
             desired_weights[edge_map] = _desired_weights
             class_balancer[edge_map] *= class_weight[label]
@@ -316,11 +322,11 @@ class MWPMLoss_v3(torch.autograd.Function):
         grad_output,
     ):
         edge_weights, desired_edge_weights, class_balancer = ctx.saved_tensors
-        grad = -(edge_weights - desired_edge_weights) / edge_weights.shape[0]
+        grad = (edge_weights - desired_edge_weights) / edge_weights.shape[0]
         grad = grad * class_balancer
         grad.requires_grad = True
         
-        grad = torch.ones_like(edge_weights, requires_grad=True)
+        # grad = torch.ones_like(edge_weights, requires_grad=True)
         return None, grad, None, None, None
 
 
