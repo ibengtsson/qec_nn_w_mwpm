@@ -91,8 +91,6 @@ def inference(
         )
     else:
         preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
-    print("preds",np.count_nonzero(preds))
-    print("flips",np.count_nonzero(flips))
     TP = np.sum(np.logical_and(preds == 1, flips == 1))
     TN = np.sum(np.logical_and(preds == 0, flips == 0))
     FP = np.sum(np.logical_and(preds == 1, flips == 0))

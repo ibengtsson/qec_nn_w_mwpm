@@ -129,7 +129,7 @@ class LSTrainer:
         # simulation settings
         code_size = self.graph_settings["code_size"]
         reps = self.graph_settings["repetitions"]
-        batch_size = self.training_settings["batch_size"]
+        dataset_size = self.training_settings["dataset_size"]
 
         min_error_rate = self.graph_settings["min_error_rate"]
         max_error_rate = self.graph_settings["max_error_rate"]
@@ -148,7 +148,7 @@ class LSTrainer:
                 reps,
                 code_size,
                 p,
-                batch_size,
+                dataset_size,
                 code_task=code_task,
             )
             sims.append(sim)
@@ -316,9 +316,9 @@ class LSTrainer:
 
         # training settings
         current_epoch = self.epoch
-        dataset_size = self.training_settings["dataset_size"]
+        #dataset_size = self.training_settings["dataset_size"]
         batch_size = self.training_settings["batch_size"]
-        n_batches = dataset_size // batch_size
+        #n_batches = dataset_size // batch_size
 
         n_epochs = self.training_settings["tot_epochs"]
         search_radius = self.training_settings["search_radius"]
@@ -348,7 +348,7 @@ class LSTrainer:
             start_t = datetime.now()
             _,top_accuracy = inference(self.model,syndromes,flips, device=self.device)
             ls.top_score = top_accuracy
-            for _ in range(n_batches):
+            for _ in range(batch_size):
                 ls.step(syndromes,flips)
             
 

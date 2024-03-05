@@ -3,8 +3,8 @@ paths:
   saved_model_path: 
 graph_settings:
   experiment: "z"
-  code_size: 3
-  repetitions: 3
+  code_size: 5
+  repetitions: 5
   min_error_rate: 0.001
   max_error_rate: 0.005
   m_nearest_nodes: 20
@@ -13,11 +13,11 @@ graph_settings:
   n_classes: 1
 training_settings:
   seed: Null
-  dataset_size: 1000
-  validation_set_size: 100
-  batch_size: 100
+  dataset_size: 10000
+  validation_set_size: 10000
+  batch_size: 3000
   warmup_epochs: 3
-  tot_epochs: 10
+  tot_epochs: 100
   num_selections: 25
   #gradient_factor: 2
   search_radius: 0.5
