@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from src.utils import inference
+from src.utils import inference, ls_inference
 
 class LocalSearch:
     def __init__(self, model, search_radius, num_selections, device):
@@ -73,7 +73,7 @@ class LocalSearch:
             elite_vals = self.elite[self.value]
             self.vector[self.value] = elite_vals
 
-    def step(self,syndromes,flips):
+    def step(self,x, edge_index, edge_attr, batch_labels, detector_labels,flips):
         #print(self.vector)
         self.set_value()
         self.set_noise()
@@ -81,13 +81,14 @@ class LocalSearch:
 
         self.vector[self.value] = self.vector[self.value] + self.magnitude
         self.update_weights(self.model)
-        _, new_accuracy = inference(self.model,syndromes,flips, device=self.device)
+        _, new_accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
         if new_accuracy > self.top_score:
             self.set_elite()
             self.top_score = new_accuracy
         else:
             self.set_vector()
         self.idx += 1
+        #self.update_weights(self.model)
             # decay to escape local maxima
             #self.top_score -= 0.002
 

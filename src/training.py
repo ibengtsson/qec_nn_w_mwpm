@@ -8,7 +8,7 @@ from datetime import datetime
 import random
 from typing import Callable
 
-from src.utils import parse_yaml, inference
+from src.utils import parse_yaml, inference, ls_inference
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
 from src.local_search import LocalSearch
@@ -40,13 +40,13 @@ class LSTrainer:
         else:
             self.device = torch.device("cpu")
 
-        print(f"Running model on {self.device} with batch size {training_settings['batch_size']}.")
+        print(f"Running model on {self.device} with dataset size {self.training_settings['dataset_size']}.")
         # create a dictionary saving training metrics
         training_history = {}
-        training_history["epoch"] = self.epoch
+        training_history["epoch"] = self.epoch  # this will need to be adjusted to fit warmup+train
         training_history["warmup_train_loss"] = []
         training_history["train_accuracy"] = []
-        training_history["train_loss"] = []
+        #training_history["train_loss"] = []
         training_history["val_accuracy"] = []
         training_history["best_val_accuracy"] = -1
 
@@ -60,7 +60,7 @@ class LSTrainer:
         # optimizer only used for warmup training
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), lr=training_settings["warmup_lr"]
-        )
+        )   # check this, if it can only be used in warmup
 
         # generate a unique name to not overwrite other models
         name = (
@@ -125,7 +125,7 @@ class LSTrainer:
         self.optimal_weights = saved_attributes["model"]
 
 
-    def initialise_simulations(self, n=5):
+    def initialise_simulations(self, n=5):  # check for comp with warmup
         # simulation settings
         code_size = self.graph_settings["code_size"]
         reps = self.graph_settings["repetitions"]
@@ -156,8 +156,8 @@ class LSTrainer:
         return sims
     
 
-    def create_test_set(self, n_graphs=5e5, n=5):
-
+    def create_test_set(self, n_graphs=5e5, n=5):   # this is only used for validation atm
+        
         # simulation settings
         code_size = self.graph_settings["code_size"]
         reps = self.graph_settings["repetitions"]
@@ -192,7 +192,7 @@ class LSTrainer:
         flips = np.concatenate(flips)
 
         # split into chunks to reduce memory footprint later
-        batch_size = self.training_settings["batch_size"]
+        batch_size = self.training_settings["batch_size"]   # maybe change?
         n_splits = syndromes.shape[0] // batch_size + 1
 
         syndromes = np.array_split(syndromes, n_splits)
@@ -201,12 +201,13 @@ class LSTrainer:
         return syndromes, flips, n_identities
     
     def evaluate_test_set(self, syndromes, flips, n_identities, n_graphs=5e4):
-
+        # is n_graphs=n_syndromes? i dont think so
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
         n_correct_preds = 0
+        bal_acc = 0
         for syndrome, flip in zip(syndromes, flips):
-
-            _n_correct_preds, _ = inference(
+            # this should maybe be changed to ls_inference and graphs generated before
+            _n_correct_preds, _bal_acc = inference(
                 self.model,
                 syndrome,
                 flip,
@@ -215,10 +216,10 @@ class LSTrainer:
                 device=self.device,
             )
             n_correct_preds += _n_correct_preds
-
+            bal_acc += _bal_acc
         val_accuracy = (n_correct_preds + n_identities) / n_graphs
-
-        return val_accuracy
+        bal_accuracy = bal_acc/len(syndromes)
+        return val_accuracy, bal_accuracy  #change to just bal i think
     
     def train_warmup(self):
 
@@ -237,7 +238,7 @@ class LSTrainer:
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
         n_node_features = self.graph_settings["n_node_features"]
         power = self.graph_settings["power"]
-
+        # create warmup dataset? with batch size = epoch dataset size for normal train
         sims = self.initialise_simulations()
 
         # generate validation syndromes
@@ -276,6 +277,7 @@ class LSTrainer:
                         edge_index,
                         edge_attr,
                         detector_labels,
+                        batch_labels,
                         warmup=True,
                     )
                 loss = loss_fun(edge_weights, label)
@@ -293,7 +295,7 @@ class LSTrainer:
             train_loss /= epoch_n_graphs
 
             # validation
-            val_accuracy = self.evaluate_test_set(
+            val_accuracy, bal_accuracy = self.evaluate_test_set(
                 val_syndromes,
                 val_flips,
                 n_val_identities,
@@ -303,33 +305,34 @@ class LSTrainer:
             # save training attributes after every epoch
             self.epoch = epoch
             self.training_history["epoch"] = epoch
-            self.training_history["train_loss"].append(train_loss)
-            self.training_history["val_accuracy"].append(val_accuracy)
+            self.training_history["warmup_train_loss"].append(train_loss)
+            self.training_history["val_accuracy"].append(bal_accuracy)
 
             if self.save_model:
                 self.save_model_w_training_settings()
                 
             epoch_t = datetime.now() - start_t
-            print(f"The epoch took: {epoch_t}, for {n_graphs} graphs.")
+            print(f"The warmup epoch took: {epoch_t}, for {n_graphs} graphs.")
+        self.epoch += 1
 
     def train(self):
 
         # training settings
         current_epoch = self.epoch
         #dataset_size = self.training_settings["dataset_size"]
-        batch_size = self.training_settings["batch_size"]
         #n_batches = dataset_size // batch_size
 
         n_epochs = self.training_settings["tot_epochs"]
         search_radius = self.training_settings["search_radius"]
-        num_selections = self.training_settings["num_selections"]
+        n_selections = self.training_settings["n_selections"]
+        experiment = self.graph_settings["experiment"]
+        n_model_params = len(torch.nn.utils.parameters_to_vector(self.model.parameters()))
+        n_dim_iter = n_model_params // n_selections
         # training optimizer
-        ls = LocalSearch(self.model, search_radius, num_selections, self.device)        
+        ls = LocalSearch(self.model, search_radius, n_selections, self.device)        
 
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
-        n_node_features = self.graph_settings["n_node_features"]
-        power = self.graph_settings["power"]
 
         sims = self.initialise_simulations()
 
@@ -339,24 +342,25 @@ class LSTrainer:
             n_graphs=n_val_graphs,
         )
         for epoch in range(current_epoch, n_epochs):
-            epoch_n_trivial = 0
             print(f"Epoch {epoch}")
             sim = random.choice(sims)
             syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True)
             epoch_n_trivial = n_trivial
             n_graphs = syndromes.shape[0]
             start_t = datetime.now()
-            _,top_accuracy = inference(self.model,syndromes,flips, device=self.device)
+            x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+            syndromes, m_nearest_nodes, experiment=experiment, device=self.device
+            )
+            _,top_accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
             ls.top_score = top_accuracy
-            for _ in range(batch_size):
-                ls.step(syndromes,flips)
-            
+            for i in range(n_dim_iter):
+                ls.step(x, edge_index, edge_attr, batch_labels, detector_labels,flips)
 
             # update model to best version after local search
             nn.utils.vector_to_parameters(ls.elite, self.model.parameters())
 
             # validation
-            val_accuracy = self.evaluate_test_set(
+            val_accuracy, bal_accuracy = self.evaluate_test_set(
                 val_syndromes,
                 val_flips,
                 n_val_identities,
@@ -367,7 +371,7 @@ class LSTrainer:
             self.epoch = epoch
             self.training_history["epoch"] = epoch
             self.training_history["train_accuracy"].append(ls.top_score)
-            self.training_history["val_accuracy"].append(val_accuracy)
+            self.training_history["val_accuracy"].append(bal_accuracy)
 
             if self.save_model:
                 self.save_model_w_training_settings()

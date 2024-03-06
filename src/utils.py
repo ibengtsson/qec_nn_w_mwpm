@@ -82,7 +82,7 @@ def inference(
         syndromes, m_nearest_nodes, experiment=experiment, device=device
     )
     edge_index, edge_weights, edge_classes = model(
-        x, edge_index, edge_attr, detector_labels
+        x, edge_index, edge_attr, detector_labels, batch_labels
     )
 
     if pool:
@@ -157,3 +157,36 @@ def predict_mwpm_with_pool(
         )
 
     return np.array(preds)
+
+
+def ls_inference(
+    model: nn.Module,
+    x: None, 
+    edge_index: None, 
+    edge_attr: None, 
+    batch_labels: None, 
+    detector_labels: None,
+    flips: np.ndarray,
+    pool: bool = False,
+):
+
+    edge_index, edge_weights, edge_classes = model(
+        x, edge_index, edge_attr, detector_labels, batch_labels
+    )
+
+    if pool:
+        preds = predict_mwpm_with_pool(
+            edge_index, edge_weights, edge_classes, batch_labels
+        )
+    else:
+        preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
+    TP = np.sum(np.logical_and(preds == 1, flips == 1))
+    TN = np.sum(np.logical_and(preds == 0, flips == 0))
+    FP = np.sum(np.logical_and(preds == 1, flips == 0))
+    FN = np.sum(np.logical_and(preds == 0, flips == 1))
+    sens = TP/(TP+FN)
+    spec = TN/(TN+FP)
+    bal_acc = (sens+spec)/2
+    n_correct = (preds == flips).sum()
+    accuracy = n_correct / len(preds)
+    return n_correct, bal_acc

@@ -6,8 +6,19 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus-per-node=A40:1
 
+# load modules and environment
 module purge
-source ~/bash_scripts/load_env.sh
+# source ~/scripts/load_env.sh
 
+# use default config if no file is provided as an input
+if [ $# -eq 0 ]
+then
+    echo "Using using default config file"
+    config="../configs/default_config.yaml"
+else
+    echo "Using config file: $1"
+    config=$1
+fi
 
-python3 ../scripts/edge_ls.py
+apptainer exec ~/PyG.sif python ../scripts/train.py -c $config --save
+# python3 ../scripts/train.py -c $config --save

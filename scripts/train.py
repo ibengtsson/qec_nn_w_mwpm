@@ -10,7 +10,7 @@ os.environ["QECSIM_CFG"] = "/cephyr/users/fridafj/Alvis"
 
 
 def main():
-        # command line parsing
+    # command line parsing
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--configuration", required=True)
     parser.add_argument("-s", "--save", required=False, action="store_true")
@@ -30,7 +30,7 @@ def main():
     
     # train model
     trainer = LSTrainer(model, config=config, save_model=save_or_not)
-    trainer.train_warmup()
+    #trainer.train_warmup()
     trainer.train()
     
     acc, logical_accuracy = trainer.get_training_metrics()

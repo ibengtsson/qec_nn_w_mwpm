@@ -2,27 +2,23 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch_geometric.nn as nng
-from torch_geometric.utils import sort_edge_index
+from torch_geometric.utils import sort_edge_index, softmax, one_hot
 import numpy as np
 from qecsim.graphtools import mwpm
 from src.graph import extract_edges
 
+import warnings
+warnings.filterwarnings('ignore', module='qecsim')
+
 
 def mwpm_prediction(edges, weights, classes):
 
-    # convert edges to dict
-    if np.unique(edges).shape[0] % 2 != 0:
-        print("Odd edges")
-        print(edges)
-        # print(weights)
-        # print(classes)
-    if edges.shape[1] == 0:
-        print("No edges?")
-        print(edges)
-        print(weights)
-        print(classes)
-
     classes = (classes > 0).astype(np.int32)
+    # if only one edge, we only have one matching
+    if edges.shape[1] == 1:
+        flip = classes.sum() & 1
+        return flip
+
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
     
@@ -30,13 +26,11 @@ def mwpm_prediction(edges, weights, classes):
 
     # need to make sure matched_edges is sorted
     matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
-    if matched_edges:
-        classes = np.array([edges_w_classes[edge] for edge in matched_edges])
-        flip = classes.sum() & 1 
+    classes = np.array([edges_w_classes[edge] for edge in matched_edges])
+    flip = classes.sum() & 1 
 
-        return flip
-    else:
-        return 0
+    return flip
+
 
 
 class SplitSyndromes(nn.Module):
@@ -81,7 +75,7 @@ class GraphNN(nn.Module):
         )
 
         # Dense layers
-        transition_dim = hidden_channels_GCN[-1] * 2 + 1
+        transition_dim = hidden_channels_GCN[-1] * 2 + 2
         channels = [transition_dim] + hidden_channels_MLP
         self.dense_layers = nn.ModuleList(
             [
@@ -105,18 +99,23 @@ class GraphNN(nn.Module):
         edges,
         edge_attr,
         detector_labels,
+        batch_labels,
         warmup=False,
     ):
 
-        w = edge_attr[:, 0] * edge_attr[:, 1]
+        w = edge_attr[:, [0]]
         for layer in self.graph_layers:
             x = layer(x, edges, w)
             x = self.activation(x)
         
         # split syndromes so only X (Z) nodes remain and create an edge embedding
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
+        
+        w = edge_attr[:, [0]]
+        c = one_hot((edge_attr[:, 1] / 2 + 0.5).to(dtype=torch.long), num_classes=2)
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
-        edge_feat = torch.cat([x_src, edge_attr[:, [0]], x_dst], dim=-1)
+        edge_feat = torch.cat([x_src, w * c, x_dst], dim=-1)
+        # edge_feat = torch.cat([x_src, edge_attr[:, [0]], x_dst], dim=-1)
         
         # send the edge features through linear layers
         for layer in self.dense_layers:
@@ -141,8 +140,9 @@ class GraphNN(nn.Module):
         edge_classes = edge_classes[range(n_edges // 2), min_inds]
         edges = edges[:, ::2]
 
-        # normalise edge_weights
-        edge_feat = torch.sigmoid(edge_feat)
+        # normalise edge_weights per graph
+        edge_batch = batch_labels[edges[0]]
+        edge_feat = softmax(edge_feat, edge_batch)
         
         return edges, edge_feat, edge_classes
-  
+    
