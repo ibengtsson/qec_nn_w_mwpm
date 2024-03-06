@@ -91,7 +91,7 @@ class GraphNN(nn.Module):
         self.split_syndromes = SplitSyndromes()
         
         # Activation function
-        self.activation = torch.nn.ReLU()
+        self.activation = torch.nn.Tanh()
 
     def forward(
         self,
