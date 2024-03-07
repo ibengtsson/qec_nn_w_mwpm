@@ -7,7 +7,6 @@ model_settings:
     - 64 
     - 128
     - 256
-    - 512
   hidden_channels_MLP: 
     - 256
     - 128
@@ -24,14 +23,14 @@ graph_settings:
   n_classes: 1
 training_settings:
   seed: Null
-  dataset_size: 1000
-  validation_set_size: 1000
-  batch_size: 1000
+  dataset_size: 10000
+  validation_set_size: 10000
+  batch_size: 2000
   warmup_epochs: 0
-  tot_epochs: 25
+  tot_epochs: 15
   gradient_factor: 2
   warmup_lr: 0.001
-  lr: 0.001
+  lr: 0.01
   device: cuda:1
   resume_training: False
   current_epoch: 0
