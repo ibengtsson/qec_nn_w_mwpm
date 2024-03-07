@@ -3,8 +3,8 @@ import yaml
 import torch
 import torch.nn as nn
 import numpy as np
+from qecsim.graphtools import mwpm
 from src.graph import get_batch_of_graphs, extract_edges
-from src.models import mwpm_prediction
 import torch.multiprocessing as mp
 from torch.multiprocessing import Pool, cpu_count
 
@@ -149,3 +149,92 @@ def predict_mwpm_with_pool(
         )
 
     return np.array(preds)
+
+def mwpm_prediction(edges, weights, classes):
+
+    classes = (classes > 0).astype(np.int32)
+    
+    # if only one edge, we only have one matching
+    if edges.shape[1] == 1:
+        flip = classes.sum() & 1
+        return flip
+
+    edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
+    edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
+    
+    matched_edges = mwpm(edges_w_weights)
+
+    # need to make sure matched_edges is sorted
+    matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
+    classes = np.array([edges_w_classes[edge] for edge in matched_edges])
+    flip = classes.sum() & 1 
+
+    return flip
+
+    
+def mwpm_w_grad(edges, weights, classes):
+    
+    classes = (classes > 0).astype(np.int32)
+    # if only one edge, we only have one matching
+    if edges.shape[1] == 1:
+        flip = classes.sum() & 1
+        gradient = torch.ones(weights.shape)
+        return flip, gradient
+    
+    edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
+    edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
+    edge_range = {tuple(sorted(x)): i for i, x in enumerate(edges.T)}
+    
+    matched_edges = mwpm(edges_w_weights)
+
+    # need to make sure matched_edges is sorted
+    matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
+
+    classes = np.array([edges_w_classes[edge] for edge in matched_edges])
+    flip = classes.sum() & 1 
+    match_inds = [edge_range[edge] for edge in matched_edges]
+    mask = np.zeros(weights.shape, dtype=bool)
+    mask[match_inds] = True
+    
+    gradient = torch.zeros(weights.shape)
+    gradient[mask] = 1
+
+    return flip, gradient
+
+def mwpm_w_grad_v2(edges, weights, classes):
+
+    # classes = (classes > 0.5).astype(np.int32)
+    classes = classes.astype(np.int32)
+    _classes = classes
+    
+    # if only one edge, we only have one matching
+    if edges.shape[1] == 1:
+        flip = classes.sum() & 1
+        mask = np.ones(weights.shape, dtype=bool)
+        return flip, mask
+    
+    
+    edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
+    edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
+    edge_range = {tuple(sorted(x)): i for i, x in enumerate(edges.T)}
+    
+    matched_edges = mwpm(edges_w_weights)
+
+    # need to make sure matched_edges is sorted
+    matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
+
+    classes = np.array([edges_w_classes[edge] for edge in matched_edges])
+    flip = classes.sum() & 1 
+    match_inds = [edge_range[edge] for edge in matched_edges]
+    mask = np.zeros(weights.shape, dtype=bool)
+    mask[match_inds] = True
+
+    # if flip:
+    #     print(_classes)
+    #     print(classes)
+    #     print(edges_w_weights)
+        
+        
+    return flip, mask
+
+    
