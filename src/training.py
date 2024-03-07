@@ -6,13 +6,16 @@ import os
 from pathlib import Path
 from datetime import datetime
 import random
-random.seed(0)
-from typing import Callable
+import pandas as pd
 
-from src.utils import parse_yaml, inference
+random.seed(0)
+
+from src.utils import parse_yaml, inference, predict_mwpm
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import GraphNN, MWPMLoss, MWPMLoss_v2, MWPMLoss_v3
+from src.models import GraphNN, GraphAttention
+from src.losses import MWPMLoss, MWPMLoss_v2, MWPMLoss_v3
+
 
 class ModelTrainer:
 
@@ -23,8 +26,8 @@ class ModelTrainer:
     ):
 
         # set seed
-        torch.manual_seed(111)
-        
+        torch.manual_seed(4)
+
         # load and initialise settings
         paths, graph_settings, model_settings, training_settings = parse_yaml(config)
         self.save_dir = Path(paths["save_dir"])
@@ -44,7 +47,9 @@ class ModelTrainer:
         else:
             self.device = torch.device("cpu")
 
-        print(f"Running model on {self.device} with batch size {training_settings['batch_size']}.")
+        print(
+            f"Running model on {self.device} with batch size {training_settings['batch_size']}."
+        )
         # create a dictionary saving training metrics
         training_history = {}
         training_history["epoch"] = self.epoch
@@ -58,13 +63,15 @@ class ModelTrainer:
         self.optimal_weights = None
 
         # move model to correct device, save loss and instantiate the optimizer
-        if not (self.device == torch.device("cuda") or self.device == torch.device("cpu")):
+        if not (
+            self.device == torch.device("cuda") or self.device == torch.device("cpu")
+        ):
             torch.cuda.set_device(self.device)
-        
+
         self.model = GraphNN(
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],
             hidden_channels_MLP=model_settings["hidden_channels_MLP"],
-            ).to(self.device)
+        ).to(self.device)
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), lr=training_settings["warmup_lr"]
         )
@@ -161,13 +168,18 @@ class ModelTrainer:
 
         return sims
 
-    def create_test_set(self, n_graphs=5e5, n=5):
+    def create_test_set(self, error_rate=None, n_graphs=5e5, n=5):
 
         # simulation settings
         code_size = self.graph_settings["code_size"]
         reps = self.graph_settings["repetitions"]
-        min_error_rate = self.graph_settings["min_error_rate"]
-        max_error_rate = self.graph_settings["max_error_rate"]
+        
+        if error_rate is None:
+            min_error_rate = self.graph_settings["min_error_rate"]
+            max_error_rate = self.graph_settings["max_error_rate"]
+        else:
+            min_error_rate = max_error_rate = error_rate
+            n = 1
 
         error_rates = np.linspace(min_error_rate, max_error_rate, n)
 
@@ -189,7 +201,9 @@ class ModelTrainer:
                 int(n_graphs / n),
                 code_task=code_task,
             )
-            syndrome, flip, n_id = sim.generate_syndromes(use_for_mwpm=True, seed=seed+i)
+            syndrome, flip, n_id = sim.generate_syndromes(
+                use_for_mwpm=True, seed=seed + i
+            )
             syndromes.append(syndrome)
             flips.append(flip)
             n_identities += n_id
@@ -212,7 +226,7 @@ class ModelTrainer:
         n_correct_preds = 0
         n_syndromes = 0
         for syndrome, flip in zip(syndromes, flips):
-            
+
             n_syndromes += syndrome.shape[0]
             _n_correct_preds = inference(
                 self.model,
@@ -245,10 +259,10 @@ class ModelTrainer:
         else:
             loss_fun = MWPMLoss_v3.apply
             n_epochs = self.training_settings["tot_epochs"]
-            
+
             # change learning rate from the warmup's
             for g in self.optimizer.param_groups:
-                g['lr'] = self.training_settings["lr"]
+                g["lr"] = self.training_settings["lr"]
 
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
@@ -262,7 +276,7 @@ class ModelTrainer:
         val_syndromes, val_flips, n_val_identities = self.create_test_set(
             n_graphs=n_val_graphs,
         )
-        
+
         for epoch in range(current_epoch, n_epochs):
             train_loss = 0
             epoch_n_graphs = 0
@@ -273,7 +287,9 @@ class ModelTrainer:
             for i in range(n_batches):
                 # simulate data as we go
                 sim = random.choice(sims)
-                syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True, seed=seed + i)
+                syndromes, flips, n_trivial = sim.generate_syndromes(
+                    use_for_mwpm=True, seed=seed + i
+                )
                 epoch_n_trivial += n_trivial
                 x, edge_index, edge_attr, batch_labels, detector_labels = (
                     get_batch_of_graphs(
@@ -302,7 +318,11 @@ class ModelTrainer:
                     loss = loss_fun(edge_weights, label)
                 else:
                     edge_index, edge_weights, edge_classes = self.model(
-                        x, edge_index, edge_attr, detector_labels, batch_labels,
+                        x,
+                        edge_index,
+                        edge_attr,
+                        detector_labels,
+                        batch_labels,
                     )
                     loss = loss_fun(
                         edge_index,
@@ -346,3 +366,72 @@ class ModelTrainer:
         val_accuracy = self.training_history["val_accuracy"]
 
         return train_loss, val_accuracy
+
+    def check_performance(self, model=None, n_graphs=1e4):
+
+        if model is None:
+            model = self.model
+
+        # create a test set
+        syndromes, flips, n_identities = self.create_test_set(
+            error_rate=1e-3,
+            n_graphs=n_graphs,
+        )
+        
+        # print statistics about dataset 
+        syndrome_shapes = [s.shape[0] for s in syndromes]
+        flips_per_syndrome = [f.sum() for f in flips]       
+        n_syndromes = sum(syndrome_shapes)
+        n_logical_flips = sum(flips_per_syndrome)
+
+        print(
+            f"We have {n_syndromes} non-trivial syndromes in a set of {int(n_graphs)} samples."
+        )
+        print(
+            f"{int(n_logical_flips)} of the syndromes correspond to a logical operator, {int(n_logical_flips / n_syndromes * 100)}%."
+        )
+
+        # run inference
+        preds = []
+        for syndrome in syndromes:
+
+            x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+                syndrome, self.graph_settings["m_nearest_nodes"], device=self.device
+            )
+            edge_index, edge_weights, edge_classes = model(
+                x,
+                edge_index,
+                edge_attr,
+                detector_labels,
+                batch_labels,
+            )
+
+            preds.append(predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels))
+        
+        preds = np.concatenate(preds)
+        flips = np.concatenate(flips)
+        n_correct = (preds == flips).sum()
+
+        # accuracy and logical accuracy
+        accuracy = n_correct / n_syndromes
+        logical_accuracy = (n_correct + n_identities) / n_graphs
+
+        # confusion plot
+        true_identity = ((preds == 0) & (flips == 0)).sum()
+        true_flip = ((preds == 1) & (flips == 1)).sum()
+        false_identity = ((preds == 0) & (flips == 1)).sum()
+        false_flip = ((preds == 1) & (flips == 0)).sum()
+
+        confusion_data = [[true_identity, false_identity], [false_flip, true_flip]]
+        df_confusion = pd.DataFrame(
+            confusion_data,
+            index=["Predicted 0", "Predicted 1"],
+            columns=["True 0", "True 1"],
+        )
+        
+        # print results
+        print(
+            f"We have an accuracy of {int(accuracy * 100)}% and a logical accuracy of {int(logical_accuracy * 100)}%."
+        )
+
+        return accuracy, logical_accuracy, df_confusion
