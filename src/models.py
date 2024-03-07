@@ -4,331 +4,7 @@ import torch.nn as nn
 import torch_geometric.nn as nng
 from torch_geometric.utils import sort_edge_index, softmax, one_hot
 import numpy as np
-from qecsim.graphtools import mwpm
-from src.graph import extract_edges
-
 import warnings
-warnings.filterwarnings('ignore', module='qecsim')
-
-
-def mwpm_prediction(edges, weights, classes):
-
-    classes = (classes > 0).astype(np.int32)
-    # if only one edge, we only have one matching
-    if edges.shape[1] == 1:
-        flip = classes.sum() & 1
-        return flip
-
-    edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
-    edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
-    
-    matched_edges = mwpm(edges_w_weights)
-
-    # need to make sure matched_edges is sorted
-    matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
-    classes = np.array([edges_w_classes[edge] for edge in matched_edges])
-    flip = classes.sum() & 1 
-
-    return flip
-
-    
-def mwpm_w_grad(edges, weights, classes):
-    
-    classes = (classes > 0).astype(np.int32)
-    # if only one edge, we only have one matching
-    if edges.shape[1] == 1:
-        flip = classes.sum() & 1
-        gradient = torch.ones(weights.shape)
-        return flip, gradient
-    
-    edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
-    edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
-    edge_range = {tuple(sorted(x)): i for i, x in enumerate(edges.T)}
-    
-    matched_edges = mwpm(edges_w_weights)
-
-    # need to make sure matched_edges is sorted
-    matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
-
-    classes = np.array([edges_w_classes[edge] for edge in matched_edges])
-    flip = classes.sum() & 1 
-    match_inds = [edge_range[edge] for edge in matched_edges]
-    mask = np.zeros(weights.shape, dtype=bool)
-    mask[match_inds] = True
-    
-    gradient = torch.zeros(weights.shape)
-    gradient[mask] = 1
-
-    return flip, gradient
-
-def mwpm_w_grad_v2(edges, weights, classes):
-
-    classes = (classes > 0).astype(np.int32)
-    
-    # if only one edge, we only have one matching
-    if edges.shape[1] == 1:
-        flip = classes.sum() & 1
-        mask = np.ones(weights.shape, dtype=bool)
-        return flip, mask
-    
-    
-    edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
-    edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
-    edge_range = {tuple(sorted(x)): i for i, x in enumerate(edges.T)}
-    
-    matched_edges = mwpm(edges_w_weights)
-
-    # need to make sure matched_edges is sorted
-    matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
-
-    classes = np.array([edges_w_classes[edge] for edge in matched_edges])
-    flip = classes.sum() & 1 
-    match_inds = [edge_range[edge] for edge in matched_edges]
-    mask = np.zeros(weights.shape, dtype=bool)
-    mask[match_inds] = True
-
-    return flip, mask
-
-class MWPMLoss(torch.autograd.Function):
-    
-    # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
-    @staticmethod
-    def forward(
-        ctx,
-        edge_indx: torch.Tensor,
-        edge_weights: torch.Tensor,
-        edge_classes: torch.Tensor,
-        batch_labels: torch.Tensor,
-        labels: np.ndarray,
-        factor: float = 2,
-    ):
-
-        edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
-        # split edges and edge weights per syndrome
-        (
-            edges_p_graph,
-            weights_p_graph,
-            classes_p_graph,
-            edge_map_p_graph,
-        ) = extract_edges(
-            edge_indx,
-            edge_attr,
-            batch_labels,
-        )
-
-        # we must loop through every graph since each one will have given a new set of edge weights
-        preds = []
-        grad_data = torch.zeros_like(edge_attr)
-        grad_help = torch.zeros_like(edge_attr)
-
-        for i, (edges, weights, classes, edge_map) in enumerate(
-            zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph)
-        ):
-            edges = edges.cpu().numpy()
-            weights = weights.cpu().numpy()
-            classes = classes.cpu().numpy()
-
-            prediction = mwpm_prediction(edges, weights, classes)
-            preds.append(prediction)
-
-            # we need a workaround for gradient computations
-            preds_partial_de = []
-            for j in range(edges.shape[1]):
-                _weights = weights.copy()
-
-                _weights[j] = _weights[j] * factor
-                delta = _weights[j] - weights[j]
-                pred_w = mwpm_prediction(edges, _weights, classes)
-                preds_partial_de.append([pred_w, delta])
-
-            # REMOVE WHEN WE KNOW THAT ALL SYNDROMES HAVE AN EDGE
-            if edge_map.numel() == 0:
-                continue
-            else:
-                grad_data[edge_map, :] = torch.tensor(
-                    preds_partial_de, dtype=torch.float32
-                ).to(grad_data.device)
-                grad_help[edge_map, 0] = prediction
-                grad_help[edge_map, 1] = labels[i]
-        preds = np.array(preds)
-
-        # compute accuracy
-        n_correct = (preds == labels).sum()
-        accuracy = n_correct / labels.shape[0]
-        loss = torch.tensor(1 - accuracy, requires_grad=True)
-
-        ctx.save_for_backward(
-            grad_data,
-            grad_help,
-        )
-
-        return loss
-
-    @staticmethod
-    def backward(
-        ctx,
-        grad_output,
-    ):
-        grad_data, grad_help = ctx.saved_tensors
-        shift_preds = grad_data[:, 0]
-        delta = grad_data[:, 1]
-
-        preds = grad_help[:, 0]
-        labels = grad_help[:, 1]
-
-        gradients = (
-            (0.5 * (shift_preds + preds) - labels) * (shift_preds - preds) / delta
-        )
-
-        gradients.requires_grad = True
-
-        return None, gradients, None, None, None, None
-
-class MWPMLoss_v2(torch.autograd.Function):
-
-    # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
-    @staticmethod
-    def forward(
-        ctx,
-        edge_indx: torch.Tensor,
-        edge_weights: torch.Tensor,
-        edge_classes: torch.Tensor,
-        batch_labels: torch.Tensor,
-        labels: np.ndarray,
-    ):
-
-        edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
-        # split edges and edge weights per syndrome
-        (
-            edges_p_graph,
-            weights_p_graph,
-            classes_p_graph,
-            edge_map_p_graph,
-        ) = extract_edges(
-            edge_indx,
-            edge_attr,
-            batch_labels,
-        )
-
-        # we must loop through every graph since each one will have given a new set of edge weights
-        preds = []
-        grads = torch.zeros_like(edge_weights, device="cpu")
-
-        for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
-            edges = edges.cpu().numpy()
-            weights = weights.cpu().numpy()
-            classes = classes.cpu().numpy()
-
-            prediction, gradients = mwpm_w_grad(edges, weights, classes)
-            preds.append(prediction)
-            
-            # if prediction is wrong, flip direction of gradient
-            if prediction != label:
-                gradients *= -1
-            
-            grads[edge_map] = gradients
-
-        grads = grads.to(edge_weights.device)
-        preds = np.array(preds)
-        
-        n_correct = (preds == labels).sum()
-        accuracy = n_correct / labels.shape[0]
-        loss = torch.tensor(1 - accuracy, requires_grad=True)
-
-        ctx.save_for_backward(grads)
-
-        return loss
-
-    @staticmethod
-    def backward(
-        ctx,
-        grad_output,
-    ):
-        grads, = ctx.saved_tensors
-        grads.requires_grad = True
-
-        return None, grads, None, None, None
-    
-class MWPMLoss_v3(torch.autograd.Function):
-
-    # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
-    @staticmethod
-    def forward(
-        ctx,
-        edge_indx: torch.Tensor,
-        edge_weights: torch.Tensor,
-        edge_classes: torch.Tensor,
-        batch_labels: torch.Tensor,
-        labels: np.ndarray,
-    ):
-
-        # initialise
-        loss_fun = torch.nn.MSELoss()
-        edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
-        
-        # class imbalance
-        n_no_flips = labels.shape[0] - labels.sum()
-        n_flips = labels.sum()
-        class_weight = [1 / (n_no_flips / labels.shape[0]), 1 / (n_flips / labels.shape[0])]
-        
-        # split edges and edge weights per syndrome
-        (
-            edges_p_graph,
-            weights_p_graph,
-            classes_p_graph,
-            edge_map_p_graph,
-        ) = extract_edges(
-            edge_indx,
-            edge_attr,
-            batch_labels,
-        )
-
-        # we must loop through every graph since each one will have given a new set of edge weights
-        desired_weights = torch.zeros_like(edge_weights, device="cpu")
-        class_balancer = torch.ones_like(edge_weights, device="cpu")
-        
-        for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
-            edges = edges.cpu().numpy()
-            weights = weights.cpu().numpy()
-            classes = classes.cpu().numpy()
-            edge_map = edge_map.cpu()
-
-            prediction, match_mask = mwpm_w_grad_v2(edges, weights, classes)
-
-            _desired_weights = torch.zeros(weights.shape)
-            n_edges = edges.shape[1]
-            n_edges_in_match = match_mask.sum()
-            norm = (n_edges - n_edges_in_match) if (n_edges - n_edges_in_match) != 0 else 1
-            if prediction == label:
-                _desired_weights[~match_mask] = 1 / norm
-            else:
-                _desired_weights[match_mask] = 1 / norm
-                
-            desired_weights[edge_map] = _desired_weights
-            class_balancer[edge_map] *= class_weight[label]
-
-        desired_weights = desired_weights.to(edge_weights.device)
-        class_balancer = class_balancer.to(edge_weights.device)
-        
-        loss = ((edge_weights - desired_weights) ** 2 * class_balancer).mean()
-        # loss = loss_fun(edge_weights, desired_weights)
-        ctx.save_for_backward(edge_weights, desired_weights, class_balancer)
-        
-        return loss
-
-    @staticmethod
-    def backward(
-        ctx,
-        grad_output,
-    ):
-        edge_weights, desired_edge_weights, class_balancer = ctx.saved_tensors
-        grad = (edge_weights - desired_edge_weights) / edge_weights.shape[0]
-        grad = grad * class_balancer
-        grad.requires_grad = True
-        
-        # grad = torch.ones_like(edge_weights, requires_grad=True)
-        return None, grad, None, None, None
-
 
 class SplitSyndromes(nn.Module):
 
@@ -371,13 +47,26 @@ class GraphNN(nn.Module):
             ]
         )
 
+        # Embedding layer for edge classes
+        emb_dim = 64
+        self.class_embd = nn.Linear(2, emb_dim)
+        self.weight_embd = nn.Linear(1, emb_dim)
+        # self.embedding = nn.Linear(2, emb_dim)
+        
         # Dense layers
-        transition_dim = hidden_channels_GCN[-1] * 2 + 2
+        transition_dim = hidden_channels_GCN[-1] * 2 + 1
         channels = [transition_dim] + hidden_channels_MLP
         self.dense_layers = nn.ModuleList(
             [
                 nn.Linear(in_channels, out_channels)
                 for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
+            ]
+        )
+        
+        # normalisation
+        self.norms = nn.ModuleList(
+            [
+                nng.GraphNorm(in_channels) for in_channels in channels[1:]
             ]
         )
 
@@ -388,7 +77,11 @@ class GraphNN(nn.Module):
         self.split_syndromes = SplitSyndromes()
         
         # Activation function
-        self.activation = torch.nn.ReLU()
+        self.activation = torch.nn.Tanh()
+        
+        # Normalisation
+        
+        # self.norm = nng.GraphNorm(in_channels=hidden_channels_GCN[-1])
 
     def forward(
         self,
@@ -409,15 +102,27 @@ class GraphNN(nn.Module):
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
         
         w = edge_attr[:, [0]]
-        c = one_hot((edge_attr[:, 1] / 2 + 0.5).to(dtype=torch.long), num_classes=2)
+        # w = self.weight_embd(w)
+        # w = self.activation(w)
+        
+        c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
+        c = self.class_embd(c)
+        c = self.activation(c)
+        
+        # c = self.embedding(c)
+        # c = self.activation(c)
+        
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
-        edge_feat = torch.cat([x_src, w * c, x_dst], dim=-1)
+        # edge_feat = torch.cat([x_src, w * c, x_dst], dim=-1)
+        edge_feat = torch.cat([x_src, w, x_dst], dim=-1) 
         # edge_feat = torch.cat([x_src, edge_attr[:, [0]], x_dst], dim=-1)
         
         # send the edge features through linear layers
-        for layer in self.dense_layers:
+        _batch_labels = batch_labels[edges[0, :]]
+        for layer, norm in zip(self.dense_layers, self.norms):
             edge_feat = layer(edge_feat)
             edge_feat = self.activation(edge_feat)
+            edge_feat = norm(edge_feat, _batch_labels)
         
         # output
         edge_feat = self.output_layer(edge_feat)
@@ -432,13 +137,113 @@ class GraphNN(nn.Module):
         edge_feat = torch.cat([edge_feat[::2], edge_feat[1::2]], dim=1)
         edge_classes = torch.stack([edge_attr[::2, 1], edge_attr[1::2, 1]], dim=1)
         
-        min_inds = torch.argmin(edge_feat, dim=1)
-        edge_feat = edge_feat[range(n_edges // 2), min_inds]
+        # TEST
+        edge_feat, min_inds = torch.min(edge_feat, dim=1)
         edge_classes = edge_classes[range(n_edges // 2), min_inds]
+        
+        # min_inds = torch.argmin(edge_feat, dim=1)
+        # edge_feat = edge_feat[range(n_edges // 2), min_inds]
+        # edge_classes = edge_classes[range(n_edges // 2), min_inds]
+        
+        
         edges = edges[:, ::2]
 
         # normalise edge_weights per graph
         edge_batch = batch_labels[edges[0]]
         edge_feat = softmax(edge_feat, edge_batch)
         
+        # # TEST
+        # edge_classes = (edge_feat * (-1 * edge_classes)).mean(dim=1)
+        # edge_feat = edge_feat.mean(dim=1)
+        
+        return edges, edge_feat, edge_classes
+
+class GraphAttention(nn.Module):
+
+    def __init__(
+        self,
+        hidden_channels_GCN=[32, 64, 128],
+        hidden_channels_MLP=[128, 64],
+        n_node_features=5,
+    ):
+        super().__init__()
+        
+        # Embedding layer for edge classes
+        emb_dim = 16
+        self.embedding = nn.Linear(2, emb_dim)
+
+        # Graph attention
+        channels = [n_node_features] + hidden_channels_GCN
+        self.graph_layers = nn.ModuleList(
+            [
+                nng.GATConv(in_channels, out_channels, edge_dim=emb_dim)
+                for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
+            ]
+        )
+        
+        # Dense layers
+        transition_dim = hidden_channels_GCN[-1] * 2
+        channels = [transition_dim] + hidden_channels_MLP
+        self.dense_layers = nn.ModuleList(
+            [
+                nn.Linear(in_channels, out_channels)
+                for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
+            ]
+        )
+
+        # Output layer
+        self.output_layer = nn.Linear(hidden_channels_MLP[-1], 1)
+
+        # Layer to split syndrome into X (Z)-graphs
+        self.split_syndromes = SplitSyndromes()
+        
+        # Activation function
+        self.activation = torch.nn.Tanh()
+
+    def forward(
+        self,
+        x,
+        edges,
+        edge_attr,
+        detector_labels,
+        batch_labels,
+    ):
+
+        # embed classes
+        c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
+        c = self.embedding(c)
+        c = self.activation(c)
+        
+        # graph attention
+        for layer in self.graph_layers:
+            x = layer(x, edges, c)
+            x = self.activation(x)
+        
+        # split syndromes so only X (Z) nodes remain
+        edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
+        
+        x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
+        edge_feat = torch.cat([x_src, x_dst], dim=-1)
+        
+        # send the edge features through linear layers
+        for layer in self.dense_layers:
+            edge_feat = layer(edge_feat)
+            edge_feat = self.activation(edge_feat)
+        
+        # output
+        edge_feat = self.output_layer(edge_feat)
+        
+        # otherwise, save the edges with minimum weights (for each duplicate edge)
+        n_edges = edge_feat.shape[0]
+        edge_feat = torch.cat([edge_feat[::2], edge_feat[1::2]], dim=1)
+        edge_classes = torch.stack([edge_attr[::2, 1], edge_attr[1::2, 1]], dim=1)
+        
+        edge_feat, min_inds = torch.min(edge_feat, dim=1)
+        edge_classes = edge_classes[range(n_edges // 2), min_inds]
+        edges = edges[:, ::2]
+
+        # normalise edge_weights per graph
+        edge_batch = batch_labels[edges[0]]
+        edge_feat = softmax(edge_feat, edge_batch)
+       
         return edges, edge_feat, edge_classes
