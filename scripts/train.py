@@ -1,10 +1,15 @@
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_theme()
+
 from pathlib import Path
 import argparse
 import sys
 sys.path.append("../")
 from src.training import ModelTrainer
 import os
-os.environ["QECSIM_CFG"] = "/cephyr/users/isakbe/Alvis"
+if "alvis" in os.uname().nodename:
+    os.environ["QECSIM_CFG"] = "/cephyr/users/isakbe/Alvis"
 
 def main():
     
@@ -25,15 +30,27 @@ def main():
         save_or_not = False
         print("Model will not be saved.")
     
-    # train model
+    # initialise model trainer
     trainer = ModelTrainer(config=config, save_model=save_or_not)
-    trainer.train(warmup=True)
+    
+    # measure a benchmark
+    print("BEFORE TRAINING:")
+    _, _, confusion_df = trainer.check_performance()
+    print(confusion_df)
+
+    # train model
     trainer.train()
     
-    loss, logical_accuracy = trainer.get_training_metrics()
+    # check performance
+    print("AFTER TRAINING:")
+    _, _, confusion_df = trainer.check_performance()
     
-    print(loss)
-    print(logical_accuracy)
+    # plt.figure()
+    # sns.heatmap(confusion_df, annot=True, fmt="d")
+    # plt.show()
+    
+    print(confusion_df)
+    
 
 if __name__ == "__main__":
     main()
