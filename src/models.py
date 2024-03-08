@@ -48,9 +48,9 @@ class GraphNN(nn.Module):
         )
 
         # Embedding layer for edge classes
-        emb_dim = 64
-        self.class_embd = nn.Linear(2, emb_dim)
-        self.weight_embd = nn.Linear(1, emb_dim)
+        # emb_dim = 64
+        # self.class_embd = nn.Linear(2, emb_dim)
+        # self.weight_embd = nn.Linear(1, emb_dim)
         # self.embedding = nn.Linear(2, emb_dim)
         
         # Dense layers
@@ -93,6 +93,7 @@ class GraphNN(nn.Module):
         warmup=False,
     ):
 
+        
         w = edge_attr[:, [0]]
         for layer in self.graph_layers:
             x = layer(x, edges, w)
@@ -105,9 +106,9 @@ class GraphNN(nn.Module):
         # w = self.weight_embd(w)
         # w = self.activation(w)
         
-        c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
-        c = self.class_embd(c)
-        c = self.activation(c)
+        # c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
+        # c = self.class_embd(c)
+        # c = self.activation(c)
         
         # c = self.embedding(c)
         # c = self.activation(c)
@@ -155,7 +156,7 @@ class GraphNN(nn.Module):
         # # TEST
         # edge_classes = (edge_feat * (-1 * edge_classes)).mean(dim=1)
         # edge_feat = edge_feat.mean(dim=1)
-        
+
         return edges, edge_feat, edge_classes
 
 class GraphAttention(nn.Module):
