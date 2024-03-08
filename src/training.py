@@ -72,9 +72,13 @@ class ModelTrainer:
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],
             hidden_channels_MLP=model_settings["hidden_channels_MLP"],
         ).to(self.device)
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=training_settings["warmup_lr"]
+        
+        self.optimizer = torch.optim.SGD(
+            self.model.parameters(), lr=training_settings["warmup_lr"], weight_decay=0.1,
         )
+        # self.optimizer = torch.optim.Adam(
+        #     self.model.parameters(), lr=training_settings["warmup_lr"], weight_decay=0.1,
+        # )
 
         # generate a unique name to not overwrite other models
         name = (
@@ -282,7 +286,13 @@ class ModelTrainer:
             epoch_n_graphs = 0
             epoch_n_trivial = 0
             print(f"Epoch {epoch}")
-
+            
+            # if epoch > 0:
+            #     for i, (name, p) in enumerate(self.model.named_parameters()):
+            #         print(f"Parameter tensor {name}:")
+            #         print(p.grad)
+            #         print(f"Mean of parameter tensor {i}:")
+            #         print(torch.mean(p.grad))
             seed = 0
             for i in range(n_batches):
                 # simulate data as we go
