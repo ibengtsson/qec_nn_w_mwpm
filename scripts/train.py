@@ -1,6 +1,6 @@
-import matplotlib.pyplot as plt
-import seaborn as sns
-sns.set_theme()
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# sns.set_theme()
 
 from pathlib import Path
 import argparse
