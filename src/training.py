@@ -26,7 +26,7 @@ class ModelTrainer:
     ):
 
         # set seed
-        torch.manual_seed(4)
+        # torch.manual_seed()
 
         # load and initialise settings
         paths, graph_settings, model_settings, training_settings = parse_yaml(config)
