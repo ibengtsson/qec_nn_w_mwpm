@@ -314,9 +314,10 @@ class ModelTrainer:
                 n_graphs = syndromes.shape[0]
 
                 # forward/backward pass
-                if i % 5 == 0:
-                    self.optimizer.zero_grad()
-
+                # if i % 5 == 0:
+                #     self.optimizer.zero_grad()
+                    
+                self.optimizer.zero_grad()
                 if warmup:
                     edge_weights, label = self.model(
                         x,
@@ -343,9 +344,9 @@ class ModelTrainer:
                         flips,
                     )
                 loss.backward()
-                if (i + 1) % 5 == 0:
-                    self.optimizer.step()
-
+                # if (i + 1) % 5 == 0:
+                #     self.optimizer.step()
+                self.optimizer.step()
                 train_loss += loss.item() * n_graphs
                 epoch_n_graphs += n_graphs
 
