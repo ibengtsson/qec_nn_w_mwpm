@@ -314,7 +314,8 @@ class ModelTrainer:
                 n_graphs = syndromes.shape[0]
 
                 # forward/backward pass
-                self.optimizer.zero_grad()
+                if i % 5 == 0:
+                    self.optimizer.zero_grad()
 
                 if warmup:
                     edge_weights, label = self.model(
@@ -342,7 +343,8 @@ class ModelTrainer:
                         flips,
                     )
                 loss.backward()
-                self.optimizer.step()
+                if (i + 1) % 5 == 0:
+                    self.optimizer.step()
 
                 train_loss += loss.item() * n_graphs
                 epoch_n_graphs += n_graphs
@@ -370,8 +372,8 @@ class ModelTrainer:
             if self.save_model:
                 self.save_model_w_training_settings()
             
-            # print(f"Loss: {train_loss:.6f}")
-            # print(f"Accuracy: {val_accuracy:.2f}")
+            print(f"Loss: {train_loss:.6f}")
+            print(f"Accuracy: {val_accuracy:.2f}")
 
     def get_training_metrics(self):
 
