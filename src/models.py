@@ -54,7 +54,7 @@ class GraphNN(nn.Module):
         # self.embedding = nn.Linear(2, emb_dim)
         
         # Dense layers
-        transition_dim = hidden_channels_GCN[-1] * 2 + 1
+        transition_dim = hidden_channels_GCN[-1] * 2 + 1 + 2
         channels = [transition_dim] + hidden_channels_MLP
         self.dense_layers = nn.ModuleList(
             [
@@ -106,7 +106,7 @@ class GraphNN(nn.Module):
         # w = self.weight_embd(w)
         # w = self.activation(w)
         
-        # c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
+        c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
         # c = self.class_embd(c)
         # c = self.activation(c)
         
@@ -115,7 +115,7 @@ class GraphNN(nn.Module):
         
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
         # edge_feat = torch.cat([x_src, w * c, x_dst], dim=-1)
-        edge_feat = torch.cat([x_src, w, x_dst], dim=-1) 
+        edge_feat = torch.cat([x_src, w, c, x_dst], dim=-1) 
         # edge_feat = torch.cat([x_src, edge_attr[:, [0]], x_dst], dim=-1)
         
         # send the edge features through linear layers
