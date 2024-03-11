@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -A NAISS2023-5-353 -p alvis
-#SBATCH -t 0-00:01:00		# days-hours:minutes:seconds
+#SBATCH -t 3-00:00:00		# days-hours:minutes:seconds
 #SBATCH -J mwpm_ls_training
 #SBATCH -o ../../alvis_out/mwpm_ls_training_%j.out
 #SBATCH --cpus-per-task=1
@@ -14,7 +14,7 @@ module purge
 if [ $# -eq 0 ]
 then
     echo "Using using default config file"
-    config="../configs/default_config.yaml"
+    config="../configs/ls_config.yaml"
 else
     echo "Using config file: $1"
     config=$1
