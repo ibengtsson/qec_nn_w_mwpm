@@ -73,12 +73,12 @@ class ModelTrainer:
             hidden_channels_MLP=model_settings["hidden_channels_MLP"],
         ).to(self.device)
         
-        self.optimizer = torch.optim.SGD(
-            self.model.parameters(), lr=training_settings["warmup_lr"], weight_decay=0.1,
-        )
-        # self.optimizer = torch.optim.Adam(
+        # self.optimizer = torch.optim.SGD(
         #     self.model.parameters(), lr=training_settings["warmup_lr"], weight_decay=0.1,
         # )
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=training_settings["warmup_lr"], weight_decay=0.1,
+        )
 
         # generate a unique name to not overwrite other models
         name = (
@@ -369,6 +369,9 @@ class ModelTrainer:
 
             if self.save_model:
                 self.save_model_w_training_settings()
+            
+            # print(f"Loss: {train_loss:.6f}")
+            # print(f"Accuracy: {val_accuracy:.2f}")
 
     def get_training_metrics(self):
 

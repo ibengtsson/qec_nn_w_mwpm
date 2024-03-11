@@ -203,6 +203,7 @@ class MWPMLoss_v3(torch.autograd.Function):
         desired_weights = torch.zeros_like(edge_weights, device="cpu")
         class_balancer = torch.ones_like(edge_weights, device="cpu")
         
+        preds = []
         for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
             edges = edges.cpu().numpy()
             weights = weights.cpu().numpy()
@@ -215,21 +216,29 @@ class MWPMLoss_v3(torch.autograd.Function):
             if prediction == label:
                 norm = max((~match_mask).sum(), 1)
                 _desired_weights[~match_mask] = 1 / norm
-                # _desired_weights[match_mask] = 0
+                _desired_weights[match_mask] = 0
             else:
                 norm = max((match_mask).sum(), 1)
-                # _desired_weights[match_mask] = 1 / norm
+                _desired_weights[match_mask] = 1 / norm
                 _desired_weights[~match_mask] = 0
                 
             desired_weights[edge_map] = _desired_weights
             class_balancer[edge_map] *= class_weight[label]
+            preds.append(prediction)
 
         desired_weights = desired_weights.to(edge_weights.device)
         class_balancer = class_balancer.to(edge_weights.device)
         
-        loss = ((edge_weights - desired_weights) ** 2 * class_balancer).mean()
+        preds = np.array(preds)
+        n_correct = (preds == labels).sum()
+        accuracy = n_correct / labels.shape[0]
+        
+        # loss = ((edge_weights - desired_weights) ** 2 * class_balancer).mean()
+        loss = ((edge_weights - desired_weights) ** 2 * (1 - accuracy)).mean()
+        
         # loss = loss_fun(edge_weights, desired_weights)
         ctx.save_for_backward(edge_weights, desired_weights, class_balancer)
+        ctx.accuracy = accuracy
         
         return loss
 
@@ -239,8 +248,9 @@ class MWPMLoss_v3(torch.autograd.Function):
         grad_output,
     ):
         edge_weights, desired_edge_weights, class_balancer = ctx.saved_tensors
+        accuracy = ctx.accuracy
         grad = (edge_weights - desired_edge_weights) / edge_weights.shape[0]
-        grad = grad * class_balancer
+        grad = grad * (1 - accuracy)
         grad.requires_grad = True
         
         # grad = torch.ones_like(edge_weights, requires_grad=True)
