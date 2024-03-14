@@ -54,7 +54,6 @@ def parse_yaml(yaml_config):
             "dataset_size": int(1e4),
             "validation_set_size": int(1e3),
             "batch_size": int(5e3),
-            "warmup_epochs": 100,
             "tot_epochs": 10,
             "lr": 0.001,
             "device": device,
