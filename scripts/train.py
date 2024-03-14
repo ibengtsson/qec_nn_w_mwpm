@@ -31,12 +31,13 @@ def main():
     # train model
     trainer = LSTrainer(model, config=config, save_model=save_or_not)
     #trainer.train_warmup()
-    trainer.train()
+    trainer.train_v2()
     
-    acc, logical_accuracy = trainer.get_training_metrics()
+    acc, logical_accuracy, acc2 = trainer.get_training_metrics()
     
     print(acc)
     print(logical_accuracy)
+    print(acc2)
     
 
 if __name__ == "__main__":

@@ -327,9 +327,17 @@ def get_batch_of_graphs(
     norm_fun = lambda x: (x - x.min()) / (x.max() - x.min())
     dist = norm_fun(dist)
 
-    # mark inner distance -1 and outer +1
-    in_mark = -1 * torch.ones_like(in_dist)
+        # mark inner distance 0 and outer +1
+    in_mark = torch.zeros_like(in_dist)
     out_mark = torch.ones_like(out_dist)
+    
+    # for edges connected to virtual nodes, the class label must be switched 
+    # because the notion of outside/inside distance is changed 
+    if even_odd.sum() > 0:
+        virtual_edges = torch.isin(edge_index, virtual_node_labels).any(dim=0)
+        in_mark[virtual_edges] = 1
+        out_mark[virtual_edges] = 0
+    
     mark = torch.cat([in_mark, out_mark], dim=0)
 
     # stack distance and marks together

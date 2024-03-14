@@ -7,18 +7,19 @@ graph_settings:
   repetitions: 5
   min_error_rate: 0.001
   max_error_rate: 0.005
+  one_error_rate: 0.005
   m_nearest_nodes: 20
   n_node_features: 5
   power: 2
   n_classes: 1
 training_settings:
   seed: Null
-  dataset_size: 10000 # both, should change
-  validation_set_size: 10000
-  batch_size: 1000  # validation set
+  dataset_size: 1000 # both, should change
+  validation_set_size: 1000
+  batch_size: 100  # validation set
   warmup_epochs: 3
-  tot_epochs: 100
-  n_selections: 100
+  tot_epochs: 10
+  n_selections: 1000
   search_radius: 0.01
   warmup_lr: 0.001
   lr: 0.0001

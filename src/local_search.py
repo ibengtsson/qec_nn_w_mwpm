@@ -24,6 +24,7 @@ class LocalSearch:
         self.noise_vector = torch.empty_like(self.vector)
         self.jumped = False
         self.search_radius = search_radius
+        self.accuracy = 0
 
     def set_value(self):
         """Use the numpy choices function (which has no equivalent in Pytorch)
@@ -81,10 +82,11 @@ class LocalSearch:
 
         self.vector[self.value] = self.vector[self.value] + self.magnitude
         self.update_weights(self.model)
-        _, new_accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+        _, new_accuracy, accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
         if new_accuracy > self.top_score:
             self.set_elite()
             self.top_score = new_accuracy
+            self.accuracy = accuracy
         else:
             self.set_vector()
         self.idx += 1

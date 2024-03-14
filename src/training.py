@@ -29,6 +29,7 @@ class LSTrainer:
         self.graph_settings = graph_settings
         self.training_settings = training_settings
         self.save_model = save_model
+        self.accuracy = []
 
         # current training status
         self.warmup_epochs = training_settings["warmup_epochs"]
@@ -49,6 +50,8 @@ class LSTrainer:
         #training_history["train_loss"] = []
         training_history["val_accuracy"] = []
         training_history["best_val_accuracy"] = -1
+        training_history["iter_improvement"] = []
+        training_history["comb_accuracy"] = []
 
         self.training_history = training_history
 
@@ -155,6 +158,30 @@ class LSTrainer:
 
         return sims
     
+    # used for getting only one error probability sim
+    def initialise_sim(self):
+        # simulation settings
+        code_size = self.graph_settings["code_size"]
+        reps = self.graph_settings["repetitions"]
+        dataset_size = self.training_settings["dataset_size"]
+        p = self.graph_settings["one_error_rate"]
+
+        task_dict = {
+            "z": "surface_code:rotated_memory_z",
+            "x": "surface_code:rotated_memory_x",
+        }
+        code_task = task_dict[self.graph_settings["experiment"]]
+
+        sim = SurfaceCodeSim(
+                reps,
+                code_size,
+                p,
+                dataset_size,
+                code_task=code_task,
+            )
+
+        return sim
+    
 
     def create_test_set(self, n_graphs=5e5, n=5):   # this is only used for validation atm
         
@@ -219,7 +246,7 @@ class LSTrainer:
             bal_acc += _bal_acc
         val_accuracy = (n_correct_preds + n_identities) / n_graphs
         bal_accuracy = bal_acc/len(syndromes)
-        return val_accuracy, bal_accuracy  #change to just bal i think
+        return val_accuracy, bal_accuracy
     
     def train_warmup(self):
 
@@ -351,7 +378,7 @@ class LSTrainer:
             x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
             syndromes, m_nearest_nodes, experiment=experiment, device=self.device
             )
-            _,top_accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+            _,top_accuracy, accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
             ls.top_score = top_accuracy
             for i in range(n_dim_iter):
                 ls.step(x, edge_index, edge_attr, batch_labels, detector_labels,flips)
@@ -372,6 +399,7 @@ class LSTrainer:
             self.training_history["epoch"] = epoch
             self.training_history["train_accuracy"].append(ls.top_score)
             self.training_history["val_accuracy"].append(bal_accuracy)
+            self.accuracy.append(accuracy)
 
             if self.save_model:
                 self.save_model_w_training_settings()
@@ -379,10 +407,74 @@ class LSTrainer:
             epoch_t = datetime.now() - start_t
             print(f"The epoch took: {epoch_t}, for {n_graphs} graphs.")
 
+
+    def train_v2(self):
+        dataset_size = self.training_settings["dataset_size"]
+        search_radius = self.training_settings["search_radius"]
+        n_selections = self.training_settings["n_selections"]
+        experiment = self.graph_settings["experiment"]
+        n_model_params = len(torch.nn.utils.parameters_to_vector(self.model.parameters()))
+        n_dim_iter = n_model_params // n_selections
+        # training optimizer
+        ls = LocalSearch(self.model, search_radius, n_selections, self.device)        
+
+        # initialise simulations and graph settings
+        m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
+
+        sim = self.initialise_sim()
+
+        # generate validation syndromes
+        n_val_graphs = self.training_settings["validation_set_size"]
+        val_syndromes, val_flips, n_val_identities = self.create_test_set(
+            n_graphs=n_val_graphs,
+        )
+        syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True)
+        n_graphs = syndromes.shape[0]
+        start_t = datetime.now()
+        x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+            syndromes, m_nearest_nodes, experiment=experiment, device=self.device
+            )
+        _,top_accuracy, accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+        ls.top_score = top_accuracy
+        self.training_history["train_accuracy"].append(ls.top_score)
+        self.training_history["iter_improvement"].append(0)
+        print(n_dim_iter)
+        for i in range(n_dim_iter):
+                old_acc = ls.top_score
+                ls.step(x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+                new_acc = ls.top_score
+                # we add new accuracy and i after each improvement
+                if ~np.equal(new_acc, old_acc):
+                    print(i)
+                    print(new_acc)
+                    self.training_history["train_accuracy"].append(ls.top_score)
+                    self.training_history["iter_improvement"].append(i+1)
+        # update model to best version after local search
+        nn.utils.vector_to_parameters(ls.elite, self.model.parameters())
+
+        # validation
+        val_accuracy, bal_accuracy = self.evaluate_test_set(
+                val_syndromes,
+                val_flips,
+                n_val_identities,
+                n_graphs=n_val_graphs,
+            )
+        
+        self.training_history["val_accuracy"].append(bal_accuracy)
+        self.training_history["comb_accuracy"].append(accuracy)
+
+        if self.save_model:
+            self.save_model_w_training_settings()
+                
+        epoch_t = datetime.now() - start_t
+        print(f"The epoch took: {epoch_t}, for {n_graphs} graphs.")
+
+
     def get_training_metrics(self):
 
         train_accuracy = self.training_history["train_accuracy"]
         val_accuracy = self.training_history["val_accuracy"]
+        acc = self.training_history["comb_accuracy"]
 
-        return train_accuracy, val_accuracy
+        return train_accuracy, val_accuracy, acc
 
