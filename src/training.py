@@ -438,35 +438,34 @@ class LSTrainer:
         ls.top_score = top_accuracy
         self.training_history["train_accuracy"].append(ls.top_score)
         self.training_history["iter_improvement"].append(0)
-        print(n_dim_iter)
+        print("Number of dimension partitions:",n_dim_iter)
         for i in range(n_dim_iter):
                 old_acc = ls.top_score
                 ls.step(x, edge_index, edge_attr, batch_labels, detector_labels,flips)
                 new_acc = ls.top_score
                 # we add new accuracy and i after each improvement
                 if ~np.equal(new_acc, old_acc):
-                    print(i)
-                    print(new_acc)
+                    print("New best found at iteration:",i)
+                    print("New best accuracy:",new_acc)
                     self.training_history["train_accuracy"].append(ls.top_score)
                     self.training_history["iter_improvement"].append(i+1)
-                    if i>50:
-                         # validation
-                        val_accuracy, bal_accuracy = self.evaluate_test_set(
-                        val_syndromes,
-                        val_flips,
-                        n_val_identities,
-                        n_graphs=n_val_graphs,
-                        )
-                        self.training_history["val_accuracy"].append(bal_accuracy)
-                        self.training_history["comb_accuracy"].append(accuracy)
-
+                    self.training_history["comb_accuracy"].append(ls.accuracy)
+                    # validation
+                    val_accuracy, bal_accuracy = self.evaluate_test_set(
+                    val_syndromes,
+                    val_flips,
+                    n_val_identities,
+                    n_graphs=n_val_graphs,
+                    )
+                    self.training_history["val_accuracy"].append(bal_accuracy)
                     if self.save_model:
                         self.save_model_w_training_settings()
+
         # update model to best version after local search
-        nn.utils.vector_to_parameters(ls.elite, self.model.parameters())
+        # nn.utils.vector_to_parameters(ls.elite, self.model.parameters())
                
         epoch_t = datetime.now() - start_t
-        print(f"The epoch took: {epoch_t}, for {n_graphs} graphs.")
+        print(f"The training took: {epoch_t}, for {n_graphs} graphs.")
 
 
     def get_training_metrics(self):

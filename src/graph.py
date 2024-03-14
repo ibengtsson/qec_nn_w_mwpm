@@ -222,8 +222,10 @@ def get_batch_of_graphs(
 
         # let virtual nodes be marked by -1 (momentarily) so we can create a label for them
         virtual_nodes[:, label[experiment]] = -1
-        virtual_nodes[:, 2:-1] = syndromes.shape[1] // 2
-        virtual_nodes[:, -1] = syndromes.shape[-1] // 2
+        # virtual_nodes[:, 2:-1] = syndromes.shape[1] // 2
+        # virtual_nodes[:, -1] = syndromes.shape[-1] // 2
+        virtual_nodes[:, 2:] = 0
+        
 
         # # create batch labels
         virtual_batch_labels = (
@@ -303,6 +305,10 @@ def get_batch_of_graphs(
 
         # sort edge index
         edge_index = sort_edge_index(edge_index)
+    
+    else:
+        # make sure the indices are sorted in both cases
+        edge_index = sort_edge_index(edge_index)
 
     # compute edge attributes (we'll have one edge for inner-distance and one for outer-distance)
     wrap_axis = {"x": 1, "z": 0}
@@ -316,18 +322,18 @@ def get_batch_of_graphs(
 
     dist = torch.cat([in_dist, out_dist], dim=0) ** power
 
-    # if the edge is connected to a virtual node, let dist = 1
-    # CAN BE IMPROVED
-    if even_odd.sum() > 0:
-        virtual_edges = torch.isin(edge_index, virtual_node_labels)
-        virtual_edges_mask = torch.cat([torch.any(virtual_edges, dim=0)] * 2)
-        dist[virtual_edges_mask] = 1
+    # # if the edge is connected to a virtual node, let dist = 1
+    # # CAN BE IMPROVED
+    # if even_odd.sum() > 0:
+    #     virtual_edges = torch.isin(edge_index, virtual_node_labels)
+    #     virtual_edges_mask = torch.cat([torch.any(virtual_edges, dim=0)] * 2)
+    #     dist[virtual_edges_mask] = 1
         
     # normalise distance
     norm_fun = lambda x: (x - x.min()) / (x.max() - x.min())
-    dist = norm_fun(dist)
+    # dist = norm_fun(dist)
 
-        # mark inner distance 0 and outer +1
+    # mark inner distance 0 and outer +1
     in_mark = torch.zeros_like(in_dist)
     out_mark = torch.ones_like(out_dist)
     
@@ -394,7 +400,6 @@ def extract_graphs(x, edges, edge_attr, batch_labels):
 
 
 def extract_edges(edge_index, edge_attr, batch_labels):
-
     batch_size = batch_labels.max() + 1
     deg = degree(batch_labels, batch_size, dtype=torch.long)
     ptr = cumsum(deg)
