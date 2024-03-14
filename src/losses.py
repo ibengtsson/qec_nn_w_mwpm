@@ -308,7 +308,7 @@ class NestedMWPMLoss(torch.autograd.Function):
                 optimal_edge_weights[~match_mask] = 0
                 
             diff = weights - optimal_edge_weights
-            grad[range(edges.shape[1]), min_inds] = diff / match_mask.shape[0]
+            grad[range(edges.shape[1]), min_inds] = diff
             grads.append(grad.T.flatten()[:, None])
             
             # compute loss and save prediction

@@ -59,6 +59,7 @@ def parse_yaml(yaml_config):
             "device": device,
             "resume_training": False,
             "current_epoch": 0,
+            "comment": "No comment"
         }
 
     # read settings into variables
