@@ -56,8 +56,6 @@ def parse_yaml(yaml_config):
             "batch_size": int(5e3),
             "warmup_epochs": 100,
             "tot_epochs": 10,
-            "gradient_factor": 3,
-            "warmup_lr": 0.01,
             "lr": 0.001,
             "device": device,
             "resume_training": False,
@@ -80,8 +78,10 @@ def inference(
     experiment: str = "z",
     m_nearest_nodes: int = 10,
     device: torch.device = torch.device("cpu"),
+    nested_tensors: bool = False,
 ):
-
+    # set model in inference mode
+    model.eval()
     x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
         syndromes, m_nearest_nodes, experiment=experiment, device=device
     )
@@ -89,7 +89,10 @@ def inference(
         x, edge_index, edge_attr, detector_labels, batch_labels,
     )
     
-    preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
+    if nested_tensors:
+        preds = predict_mwpm_nested(edge_index, edge_weights, edge_classes)
+    else:
+        preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
 
     n_correct = (preds == flips).sum()
     return n_correct
@@ -148,6 +151,31 @@ def predict_mwpm_with_pool(
             chunksize=chunk_size,
         )
 
+    return np.array(preds)
+
+def predict_mwpm_nested(edge_index, edge_weights, edge_classes):
+    
+    preds = []
+    for edges, weights, classes in zip(edge_index, edge_weights, edge_classes):
+        
+        # find which (of the two) egdes that have the minimum weight for each node pair
+        weights = torch.cat([weights[::2], weights[1::2]], dim=1)
+        classes = torch.cat([classes[::2], classes[1::2]], dim=1)
+        edges = edges[:, ::2]
+        
+        weights, min_inds = torch.min(weights, dim=1)
+        classes = classes[range(edges.shape[1]), min_inds]
+        
+        # do a softmax on the weights
+        weights = torch.nn.functional.softmax(weights, dim=0)
+        
+        # move to CPU and run MWPM
+        edges = edges.detach().cpu().numpy()
+        weights = weights.detach().cpu().numpy()
+        classes = classes.detach().cpu().numpy()
+        p = mwpm_prediction(edges, weights, classes)
+        preds.append(p)
+    
     return np.array(preds)
 
 def mwpm_prediction(edges, weights, classes):
