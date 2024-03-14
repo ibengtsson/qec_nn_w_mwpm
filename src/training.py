@@ -8,13 +8,11 @@ from datetime import datetime
 import random
 import pandas as pd
 
-random.seed(0)
-
-from src.utils import parse_yaml, inference, predict_mwpm
+from src.utils import parse_yaml, inference, predict_mwpm, predict_mwpm_nested
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import GraphNN, GraphAttention
-from src.losses import MWPMLoss, MWPMLoss_v2, MWPMLoss_v3
+from src.models import GraphNN, GraphAttention, GraphNNV2
+from src.losses import MWPMLoss, MWPMLoss_v2, MWPMLoss_v3, NestedMWPMLoss
 
 
 class ModelTrainer:
@@ -23,10 +21,16 @@ class ModelTrainer:
         self,
         config: os.PathLike = None,
         save_model: bool = True,
+        seeds: bool = False,
     ):
-
-        # set seed
-        # torch.manual_seed()
+        
+        # set seed if desired
+        if seeds:
+            random.seed(747)
+            torch.manual_seed(747)
+            self.simul_seed = 747
+        else:
+            self.simul_seed = None
 
         # load and initialise settings
         paths, graph_settings, model_settings, training_settings = parse_yaml(config)
@@ -73,12 +77,8 @@ class ModelTrainer:
             hidden_channels_MLP=model_settings["hidden_channels_MLP"],
         ).to(self.device)
         
-        # self.optimizer = torch.optim.SGD(
-        #     self.model.parameters(), lr=training_settings["warmup_lr"], weight_decay=0.1,
-        # )
         self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=training_settings["warmup_lr"], weight_decay=0.1,
-        )
+            self.model.parameters(), lr=training_settings["lr"])
 
         # generate a unique name to not overwrite other models
         name = (
@@ -196,8 +196,14 @@ class ModelTrainer:
         syndromes = []
         flips = []
         n_identities = 0
-        seed = 0
         for i, p in enumerate(error_rates):
+            
+            # potential seed
+            if self.simul_seed:
+                seed = self.simul_seed + i
+            else:
+                seed = None
+                
             sim = SurfaceCodeSim(
                 reps,
                 code_size,
@@ -205,9 +211,7 @@ class ModelTrainer:
                 int(n_graphs / n),
                 code_task=code_task,
             )
-            syndrome, flip, n_id = sim.generate_syndromes(
-                use_for_mwpm=True, seed=seed + i
-            )
+            syndrome, flip, n_id = sim.generate_syndromes(use_for_mwpm=True, seed=seed)
             syndromes.append(syndrome)
             flips.append(flip)
             n_identities += n_id
@@ -246,28 +250,18 @@ class ModelTrainer:
 
         return val_accuracy
 
-    def train(self, warmup=False):
+    def train(self):
 
         # training settings
         current_epoch = self.epoch
         dataset_size = self.training_settings["dataset_size"]
         batch_size = self.training_settings["batch_size"]
+        n_epochs = self.training_settings["tot_epochs"]
         n_batches = dataset_size // batch_size
-        gradient_factor = self.training_settings["gradient_factor"]
-
-        # initialise warmup if used
-        if warmup:
-            loss_fun = nn.MSELoss()
-            n_epochs = self.training_settings["warmup_epochs"]
-
-        else:
-            loss_fun = MWPMLoss_v3.apply
-            n_epochs = self.training_settings["tot_epochs"]
-
-            # change learning rate from the warmup's
-            for g in self.optimizer.param_groups:
-                g["lr"] = self.training_settings["lr"]
-
+        
+        # set loss function
+        loss_fun = MWPMLoss_v3.apply
+        
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
         n_node_features = self.graph_settings["n_node_features"]
@@ -282,10 +276,19 @@ class ModelTrainer:
         )
 
         for epoch in range(current_epoch, n_epochs):
+            print(f"Epoch {epoch}")
+            self.model.train()
+            
+            # set potential seed
+            if self.simul_seed:
+                seed = self.simul_seed + epoch + int(1e8)
+            else:
+                seed = None
+            
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
-            print(f"Epoch {epoch}")
+            
             
             # if epoch > 0:
             #     for i, (name, p) in enumerate(self.model.named_parameters()):
@@ -293,14 +296,13 @@ class ModelTrainer:
             #         print(p.grad)
             #         print(f"Mean of parameter tensor {i}:")
             #         print(torch.mean(p.grad))
-            seed = 0
-            for i in range(n_batches):
+            for _ in range(n_batches):
+                
                 # simulate data as we go
                 sim = random.choice(sims)
-                syndromes, flips, n_trivial = sim.generate_syndromes(
-                    use_for_mwpm=True, seed=seed + i
-                )
+                syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True, seed=seed)
                 epoch_n_trivial += n_trivial
+                
                 x, edge_index, edge_attr, batch_labels, detector_labels = (
                     get_batch_of_graphs(
                         syndromes,
@@ -312,40 +314,22 @@ class ModelTrainer:
                 )
 
                 n_graphs = syndromes.shape[0]
-
-                # forward/backward pass
-                # if i % 5 == 0:
-                #     self.optimizer.zero_grad()
-                    
                 self.optimizer.zero_grad()
-                if warmup:
-                    edge_weights, label = self.model(
-                        x,
-                        edge_index,
-                        edge_attr,
-                        detector_labels,
-                        batch_labels,
-                        warmup=warmup,
-                    )
-                    loss = loss_fun(edge_weights, label)
-                else:
-                    edge_index, edge_weights, edge_classes = self.model(
-                        x,
-                        edge_index,
-                        edge_attr,
-                        detector_labels,
-                        batch_labels,
-                    )
-                    loss = loss_fun(
-                        edge_index,
-                        edge_weights,
-                        edge_classes,
-                        batch_labels,
-                        flips,
-                    )
+                edge_index, edge_weights, edge_classes = self.model(
+                    x,
+                    edge_index,
+                    edge_attr,
+                    detector_labels,
+                    batch_labels,
+                )
+                loss = loss_fun(
+                    edge_index,
+                    edge_weights,
+                    edge_classes,
+                    batch_labels,
+                    flips,
+                )
                 loss.backward()
-                # if (i + 1) % 5 == 0:
-                #     self.optimizer.step()
                 self.optimizer.step()
                 train_loss += loss.item() * n_graphs
                 epoch_n_graphs += n_graphs
@@ -422,6 +406,7 @@ class ModelTrainer:
                 batch_labels,
             )
 
+            # preds.append(predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels))
             preds.append(predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels))
         
         preds = np.concatenate(preds)
