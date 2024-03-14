@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -A NAISS2023-5-353 -p alvis
-#SBATCH -t 3-00:00:00		# days-hours:minutes:seconds
+#SBATCH -t 1-00:00:00		# days-hours:minutes:seconds
 #SBATCH -J mwpm_ls_training
 #SBATCH -o ../../alvis_out/mwpm_ls_training_%j.out
 #SBATCH --cpus-per-task=1
@@ -20,5 +20,5 @@ else
     config=$1
 fi
 
-apptainer exec ~/PyG.sif python ../scripts/train.py -c $config --save
+apptainer exec ~/conda-cont.sif python ../scripts/train.py -c $config --save
 # python3 ../scripts/train.py -c $config --save
