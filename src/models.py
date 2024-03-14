@@ -2,7 +2,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch_geometric.nn as nng
-from torch_geometric.utils import sort_edge_index, softmax, one_hot
+from torch_geometric.utils import sort_edge_index, softmax, one_hot, unbatch
 import numpy as np
 import warnings
 
@@ -46,13 +46,7 @@ class GraphNN(nn.Module):
                 for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
             ]
         )
-
-        # Embedding layer for edge classes
-        # emb_dim = 64
-        # self.class_embd = nn.Linear(2, emb_dim)
-        # self.weight_embd = nn.Linear(1, emb_dim)
-        # self.embedding = nn.Linear(2, emb_dim)
-        
+    
         # Dense layers
         transition_dim = hidden_channels_GCN[-1] * 2 + 1 + 2
         channels = [transition_dim] + hidden_channels_MLP
@@ -78,10 +72,6 @@ class GraphNN(nn.Module):
         
         # Activation function
         self.activation = torch.nn.Tanh()
-        
-        # Normalisation
-        
-        # self.norm = nng.GraphNorm(in_channels=hidden_channels_GCN[-1])
 
     def forward(
         self,
@@ -103,20 +93,10 @@ class GraphNN(nn.Module):
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
         
         w = edge_attr[:, [0]]
-        # w = self.weight_embd(w)
-        # w = self.activation(w)
-        
         c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
-        # c = self.class_embd(c)
-        # c = self.activation(c)
-        
-        # c = self.embedding(c)
-        # c = self.activation(c)
         
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
-        # edge_feat = torch.cat([x_src, w * c, x_dst], dim=-1)
         edge_feat = torch.cat([x_src, w, c, x_dst], dim=-1) 
-        # edge_feat = torch.cat([x_src, edge_attr[:, [0]], x_dst], dim=-1)
         
         # send the edge features through linear layers
         _batch_labels = batch_labels[edges[0, :]]
@@ -128,35 +108,19 @@ class GraphNN(nn.Module):
         # output
         edge_feat = self.output_layer(edge_feat)
         
-        # if warmup, train network to do identity mapping
-        if warmup:
-            label = edge_attr[:, [0]]
-            return edge_feat, label
-        
-        # otherwise, save the edges with minimum weights (for each duplicate edge)
+        # save the edges with minimum weights (for each duplicate edge)
         n_edges = edge_feat.shape[0]
         edge_feat = torch.cat([edge_feat[::2], edge_feat[1::2]], dim=1)
         edge_classes = torch.stack([edge_attr[::2, 1], edge_attr[1::2, 1]], dim=1)
         
-        # TEST
         edge_feat, min_inds = torch.min(edge_feat, dim=1)
         edge_classes = edge_classes[range(n_edges // 2), min_inds]
-        
-        # min_inds = torch.argmin(edge_feat, dim=1)
-        # edge_feat = edge_feat[range(n_edges // 2), min_inds]
-        # edge_classes = edge_classes[range(n_edges // 2), min_inds]
-        
-        
         edges = edges[:, ::2]
 
         # normalise edge_weights per graph
         edge_batch = batch_labels[edges[0]]
         edge_feat = softmax(edge_feat, edge_batch)
         
-        # # TEST
-        # edge_classes = (edge_feat * (-1 * edge_classes)).mean(dim=1)
-        # edge_feat = edge_feat.mean(dim=1)
-
         return edges, edge_feat, edge_classes
 
 class GraphAttention(nn.Module):
@@ -248,3 +212,94 @@ class GraphAttention(nn.Module):
         edge_feat = softmax(edge_feat, edge_batch)
        
         return edges, edge_feat, edge_classes
+
+class GraphNNV2(nn.Module):
+
+    def __init__(
+        self,
+        hidden_channels_GCN=[32, 64, 128],
+        hidden_channels_MLP=[128, 64],
+        n_node_features=5,
+    ):
+        super().__init__()
+
+        # GCN layers
+        channels = [n_node_features] + hidden_channels_GCN
+        self.graph_layers = nn.ModuleList(
+            [
+                nng.GraphConv(in_channels, out_channels)
+                for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
+            ]
+        )
+        
+        # Dense layers
+        transition_dim = hidden_channels_GCN[-1] * 2 + 1 + 2
+        channels = [transition_dim] + hidden_channels_MLP
+        self.dense_layers = nn.ModuleList(
+            [
+                nn.Linear(in_channels, out_channels)
+                for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
+            ]
+        )
+        
+        # Normalisation
+        self.norms = nn.ModuleList(
+            [
+                nn.LayerNorm(in_channels) for in_channels in channels[1:]
+            ]
+        )
+
+        # Output layer
+        self.output_layer = nn.Linear(hidden_channels_MLP[-1], 1)
+
+        # Layer to split syndrome into X (Z)-graphs
+        self.split_syndromes = SplitSyndromes()
+        
+        # Activation functions
+        self.graph_activation = torch.nn.Tanh()
+        self.dense_activation = torch.nn.SiLU()
+
+    def forward(
+        self,
+        x,
+        edges,
+        edge_attr,
+        detector_labels,
+        batch_labels,
+    ):
+
+        w = edge_attr[:, [0]]
+        for layer in self.graph_layers:
+            x = layer(x, edges, w)
+            x = self.graph_activation(x)
+        
+        # split syndromes so only X (Z) nodes remain and create an edge embedding
+        edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
+        
+        w = edge_attr[:, [0]]
+        c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
+        
+        x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
+        _batch_labels = batch_labels[edges[0, :]]
+        
+        edge_feat = torch.cat([x_src, w, c, x_dst], dim=-1) 
+        edge_feat_p_batch = list(unbatch(edge_feat, _batch_labels))
+        edge_feat = torch.nested.as_nested_tensor(edge_feat_p_batch)
+        
+        # send the edge features through linear layers
+        for layer, norm in zip(self.dense_layers, self.norms):
+            edge_feat = layer(edge_feat)
+            edge_feat = self.dense_activation(edge_feat)
+            edge_feat = norm(edge_feat)
+        
+        # output
+        edge_feat = self.output_layer(edge_feat)
+        
+        # seperate data
+        edges_p_batch = list(unbatch(edges, _batch_labels, dim=1))
+        edges = torch.nested.as_nested_tensor(edges_p_batch)
+        
+        edge_classes_p_batch = list(unbatch(edge_attr[:, [1]], _batch_labels))
+        edge_classes = torch.nested.as_nested_tensor(edge_classes_p_batch)
+        
+        return edges.unbind(), edge_feat.unbind(), edge_classes.unbind()
