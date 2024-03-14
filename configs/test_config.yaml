@@ -31,4 +31,5 @@ training_settings:
   device: cuda:1
   resume_training: False
   current_epoch: 0
+  comment: "Nested, no accuracy scaling in loss"
 

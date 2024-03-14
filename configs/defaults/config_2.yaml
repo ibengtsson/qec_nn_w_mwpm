@@ -1,13 +1,15 @@
 paths:
-  save_dir: ../training_outputs/
+  save_dir: ../../training_outputs/
   saved_model_path: 
 model_settings:
   hidden_channels_GCN: 
     - 32
+    - 64
     - 128
     - 256
     - 512
   hidden_channels_MLP: 
+    - 512
     - 256
     - 128
     - 64

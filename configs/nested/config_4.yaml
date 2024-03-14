@@ -1,13 +1,15 @@
 paths:
-  save_dir: ../training_outputs/
+  save_dir: ../../training_outputs/
   saved_model_path: 
 model_settings:
   hidden_channels_GCN: 
     - 32
+    - 64
     - 128
     - 256
     - 512
   hidden_channels_MLP: 
+    - 512
     - 256
     - 128
     - 64
@@ -27,9 +29,9 @@ training_settings:
   validation_set_size: 10000
   batch_size: 20000
   tot_epochs: 300
-  lr: 0.001
+  lr: 0.00001
   device: cuda
   resume_training: False
   current_epoch: 0
-  comment: "Not nested, no accuracy scaling in loss"
+  comment: Nested, no accuracy scaling in loss
 
