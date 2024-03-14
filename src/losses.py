@@ -249,10 +249,95 @@ class MWPMLoss_v3(torch.autograd.Function):
     ):
         edge_weights, desired_edge_weights, class_balancer = ctx.saved_tensors
         accuracy = ctx.accuracy
-        grad = (edge_weights - desired_edge_weights) / edge_weights.shape[0]
-        grad = grad * (1 - accuracy)
-        grad.requires_grad = True
-        
-        # grad = torch.ones_like(edge_weights, requires_grad=True)
+        grad = edge_weights - desired_edge_weights
+        # grad = grad * (1 - accuracy)
         
         return None, grad, None, None, None
+    
+class NestedMWPMLoss(torch.autograd.Function):
+
+    # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
+    @staticmethod
+    def forward(
+        ctx,
+        *args,
+    ):
+        labels = args[-1]
+        n_graphs = labels.shape[0]
+        
+        edge_index = args[:n_graphs]
+        edge_weights = args[n_graphs:(2*n_graphs)]
+        edge_classes = args[(2*n_graphs):-1]
+        
+        # we must loop through every graph since each one will have given a new set of edge weights
+        loss = 0
+        preds = []
+        grads = []
+        for edges, weights, classes, label in zip(edge_index, edge_weights, edge_classes, labels):
+
+            # find which (of the two) egdes that have the minimum weight for each node pair
+            weights = torch.cat([weights[::2], weights[1::2]], dim=1)
+            classes = torch.cat([classes[::2], classes[1::2]], dim=1)
+            edges = edges[:, ::2]
+  
+            # initialise a gradient array with same block shape
+            grad = torch.zeros_like(weights)
+            
+            weights, min_inds = torch.min(weights, dim=1)
+            classes = classes[range(edges.shape[1]), min_inds]
+            
+            # do a softmax on the weights
+            weights = torch.nn.functional.softmax(weights, dim=0)
+
+            # move to CPU and run MWPM
+            edges = edges.cpu().numpy()
+            _weights = weights.cpu().numpy()
+            classes = classes.cpu().numpy()
+            
+            prediction, match_mask = mwpm_w_grad_v2(edges, _weights, classes)
+            
+            # compute gradients
+            optimal_edge_weights = torch.zeros_like(weights)
+            if prediction == label:
+                norm = max((~match_mask).sum(), 1)
+                optimal_edge_weights[~match_mask] = 1 / norm
+                optimal_edge_weights[match_mask] = 0
+            else:
+                norm = max((match_mask).sum(), 1)
+                optimal_edge_weights[match_mask] = 1 / norm
+                optimal_edge_weights[~match_mask] = 0
+                
+            diff = weights - optimal_edge_weights
+            grad[range(edges.shape[1]), min_inds] = diff / match_mask.shape[0]
+            grads.append(grad.T.flatten()[:, None])
+            
+            # compute loss and save prediction
+            loss += (diff ** 2).sum()
+            preds.append(prediction)
+            
+        grads = torch.nested.nested_tensor(grads)
+        preds = np.array(preds)
+        
+        # compute accuracy and scale loss
+        n_correct = (preds == labels).sum()
+        accuracy = n_correct / labels.shape[0]
+        
+        loss *= (1 - accuracy)
+        loss /= labels.shape[0]
+        ctx.save_for_backward(grads)
+        ctx.accuracy = accuracy
+        ctx.n_graphs = labels.shape[0]
+
+        return loss
+
+    @staticmethod
+    def backward(
+        ctx,
+        grad_output,
+    ):
+        grads, = ctx.saved_tensors
+        accuracy = ctx.accuracy
+        n_graphs = ctx.n_graphs
+        # grads = grads * np.sqrt(1 - accuracy)
+
+        return (None,) * n_graphs + grads.unbind() + (None,) * n_graphs + (None,)
