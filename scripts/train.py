@@ -1,7 +1,3 @@
-# import matplotlib.pyplot as plt
-# import seaborn as sns
-# sns.set_theme()
-
 from pathlib import Path
 import argparse
 import sys
@@ -44,10 +40,6 @@ def main():
     # check performance
     print("AFTER TRAINING:")
     _, _, confusion_df = trainer.check_performance()
-    
-    # plt.figure()
-    # sns.heatmap(confusion_df, annot=True, fmt="d")
-    # plt.show()
     
     print(confusion_df)
     
