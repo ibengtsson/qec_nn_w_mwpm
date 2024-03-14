@@ -449,23 +449,22 @@ class LSTrainer:
                     print(new_acc)
                     self.training_history["train_accuracy"].append(ls.top_score)
                     self.training_history["iter_improvement"].append(i+1)
+                    if i>50:
+                         # validation
+                        val_accuracy, bal_accuracy = self.evaluate_test_set(
+                        val_syndromes,
+                        val_flips,
+                        n_val_identities,
+                        n_graphs=n_val_graphs,
+                        )
+                        self.training_history["val_accuracy"].append(bal_accuracy)
+                        self.training_history["comb_accuracy"].append(accuracy)
+
+                    if self.save_model:
+                        self.save_model_w_training_settings()
         # update model to best version after local search
         nn.utils.vector_to_parameters(ls.elite, self.model.parameters())
-
-        # validation
-        val_accuracy, bal_accuracy = self.evaluate_test_set(
-                val_syndromes,
-                val_flips,
-                n_val_identities,
-                n_graphs=n_val_graphs,
-            )
-        
-        self.training_history["val_accuracy"].append(bal_accuracy)
-        self.training_history["comb_accuracy"].append(accuracy)
-
-        if self.save_model:
-            self.save_model_w_training_settings()
-                
+               
         epoch_t = datetime.now() - start_t
         print(f"The epoch took: {epoch_t}, for {n_graphs} graphs.")
 
