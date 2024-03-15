@@ -341,3 +341,85 @@ class NestedMWPMLoss(torch.autograd.Function):
         # grads = grads * np.sqrt(1 - accuracy)
 
         return (None,) * n_graphs + grads.unbind() + (None,) * n_graphs + (None,)
+    
+class MWPMLoss_v4(torch.autograd.Function):
+
+    # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
+    @staticmethod
+    def forward(
+        ctx,
+        edge_indx: torch.Tensor,
+        edge_weights: torch.Tensor,
+        edge_classes: torch.Tensor,
+        batch_labels: torch.Tensor,
+        labels: np.ndarray,
+    ):
+
+        # initialise
+        edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
+        
+        # class imbalance
+        n_no_flips = labels.shape[0] - labels.sum()
+        n_flips = labels.sum()
+        class_weight = [1 / (n_no_flips / labels.shape[0]), 1 / (n_flips / labels.shape[0])]
+        
+        # split edges and edge weights per syndrome
+        (
+            edges_p_graph,
+            weights_p_graph,
+            classes_p_graph,
+            edge_map_p_graph,
+        ) = extract_edges(
+            edge_indx,
+            edge_attr,
+            batch_labels,
+        )
+
+        # we must loop through every graph since each one will have given a new set of edge weights
+        desired_weights = torch.zeros_like(edge_weights, device="cpu")
+        
+        preds = []
+        for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
+            edges = edges.cpu().numpy()
+            weights = weights.cpu().numpy()
+            classes = classes.cpu().numpy()
+            edge_map = edge_map.cpu()
+
+            prediction, match_mask = mwpm_w_grad_v2(edges, weights, classes)
+
+            _desired_weights = torch.zeros(weights.shape)
+            if prediction == label:
+                _desired_weights[~match_mask] = 1
+                _desired_weights[match_mask] = 0
+            else:
+                _desired_weights[match_mask] = 1
+                _desired_weights[~match_mask] = 0
+                
+            desired_weights[edge_map] = _desired_weights
+            preds.append(prediction)
+
+        desired_weights = desired_weights.to(edge_weights.device)
+        
+        preds = np.array(preds)
+        n_correct = (preds == labels).sum()
+        accuracy = n_correct / labels.shape[0]
+        
+        
+        loss = ((edge_weights - desired_weights) ** 2).mean()
+        
+        # loss = loss_fun(edge_weights, desired_weights)
+        ctx.save_for_backward(edge_weights, desired_weights)
+        ctx.accuracy = accuracy
+        
+        return loss
+
+    @staticmethod
+    def backward(
+        ctx,
+        grad_output,
+    ):
+        edge_weights, desired_edge_weights = ctx.saved_tensors
+        accuracy = ctx.accuracy
+        grad = edge_weights - desired_edge_weights
+        
+        return None, grad, None, None, None
