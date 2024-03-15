@@ -428,6 +428,11 @@ class LSTrainer:
         val_syndromes, val_flips, n_val_identities = self.create_test_set(
             n_graphs=n_val_graphs,
         )
+        repeat_selection = self.training_settings["repeat_selection"]
+        if repeat_selection:
+            n_repetitions = self.training_settings["n_repetitions"]
+        else:
+            n_repetitions = 1
         syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True)
         n_graphs = syndromes.shape[0]
         start_t = datetime.now()
@@ -439,7 +444,7 @@ class LSTrainer:
         self.training_history["train_accuracy"].append(ls.top_score)
         self.training_history["iter_improvement"].append(0)
         print("Number of dimension partitions:",n_dim_iter)
-        for i in range(n_dim_iter):
+        for i in range(n_dim_iter*n_repetitions):
                 old_acc = ls.top_score
                 ls.step(x, edge_index, edge_attr, batch_labels, detector_labels,flips)
                 new_acc = ls.top_score
