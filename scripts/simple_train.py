@@ -27,7 +27,7 @@ def main():
         print("Model will not be saved.")
     
     # initialise model trainer
-    trainer = SimpleTrainer(config=config, save_model=save_or_not, seeds=True)
+    trainer = SimpleTrainer(config=config, save_model=save_or_not, seeds=False)
     
     # measure a benchmark
     print("BEFORE TRAINING:")
