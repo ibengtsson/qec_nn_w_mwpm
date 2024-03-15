@@ -6,9 +6,8 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus-per-node=A40:1
 
-# load modules and environment
+# purge modules
 module purge
-# source ~/scripts/load_env.sh
 
 # use default config if no file is provided as an input
 if [ $# -eq 0 ]
@@ -21,4 +20,3 @@ else
 fi
 
 apptainer exec ~/containers/torch/PyG_new.sif python ../scripts/train.py -c $config --save
-# python3 ../scripts/train.py -c $config --save
