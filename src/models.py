@@ -380,8 +380,5 @@ class SimpleGraphNN(nn.Module):
         edge_feat, min_inds = torch.min(edge_feat, dim=1)
         edge_classes = edge_classes[range(n_edges // 2), min_inds]
         edges = edges[:, ::2]
-
-        # send edge weights through sigmoid
-        edge_feat = torch.nn.functional.sigmoid(edge_feat)
         
         return edges, edge_feat, edge_classes
