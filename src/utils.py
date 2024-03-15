@@ -97,6 +97,32 @@ def inference(
     n_correct = (preds == flips).sum()
     return n_correct
 
+def inference_TEST(
+    model: nn.Module,
+    syndromes: np.ndarray,
+    flips: np.ndarray,
+    experiment: str = "z",
+    m_nearest_nodes: int = 10,
+    device: torch.device = torch.device("cpu"),
+    nested_tensors: bool = False,
+):
+    # set model in inference mode
+    model.eval()
+    x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+        syndromes, m_nearest_nodes, experiment=experiment, device=device
+    )
+    edge_index, edge_weights, edge_classes = model(
+        x, edge_index, edge_attr, detector_labels,
+    )
+    
+    if nested_tensors:
+        preds = predict_mwpm_nested(edge_index, edge_weights, edge_classes)
+    else:
+        preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
+
+    n_correct = (preds == flips).sum()
+    return n_correct
+
 
 def predict_mwpm(
     edge_index: torch.Tensor,
@@ -180,7 +206,7 @@ def predict_mwpm_nested(edge_index, edge_weights, edge_classes):
 
 def mwpm_prediction(edges, weights, classes):
 
-    classes = (classes > 0).astype(np.int32)
+    classes = classes.astype(np.int32)
     
     # if only one edge, we only have one matching
     if edges.shape[1] == 1:
