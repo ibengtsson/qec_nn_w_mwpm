@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore', module='qecsim')
 
 def mwpm_prediction(edges, weights, classes):
 
-    classes = (classes > 0).astype(np.int32)
+    classes = classes.astype(np.int32)
     # if only one edge, we only have one matching
     if edges.shape[1] == 1:
         flip = classes.sum() & 1

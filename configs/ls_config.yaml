@@ -19,7 +19,7 @@ training_settings:
   batch_size: 100  # validation set
   warmup_epochs: 3
   tot_epochs: 10
-  n_selections: 1000
+  n_selections: 100
   repeat_selection: True
   n_repetitions: 3
   search_radius: 0.01
