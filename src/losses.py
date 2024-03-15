@@ -179,13 +179,8 @@ class MWPMLoss_v3(torch.autograd.Function):
     ):
 
         # initialise
-        loss_fun = torch.nn.MSELoss()
+        eps = 1e-8
         edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
-        
-        # class imbalance
-        n_no_flips = labels.shape[0] - labels.sum()
-        n_flips = labels.sum()
-        class_weight = [1 / (n_no_flips / labels.shape[0]), 1 / (n_flips / labels.shape[0])]
         
         # split edges and edge weights per syndrome
         (
@@ -201,10 +196,24 @@ class MWPMLoss_v3(torch.autograd.Function):
 
         # we must loop through every graph since each one will have given a new set of edge weights
         desired_weights = torch.zeros_like(edge_weights, device="cpu")
-        class_balancer = torch.ones_like(edge_weights, device="cpu")
         
         preds = []
         for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
+            
+            # # treat single edges seperately for now
+            # if weights.shape[0] == 1:
+            #     classes = classes.cpu().numpy().astype(np.int32)
+            #     prediction = classes.sum() & 1
+                
+            #     if prediction == label: 
+            #         desired_weights[edge_map] = 0
+            #     else:
+            #         desired_weights[edge_map] = 2
+            #     preds.append(prediction)
+            #     continue
+            # take softmax of the inverse weight ---> gives probability that an edge should belong in matching
+            #?????????????????????????
+            
             edges = edges.cpu().numpy()
             weights = weights.cpu().numpy()
             classes = classes.cpu().numpy()
@@ -223,21 +232,19 @@ class MWPMLoss_v3(torch.autograd.Function):
                 _desired_weights[~match_mask] = 0
                 
             desired_weights[edge_map] = _desired_weights
-            class_balancer[edge_map] *= class_weight[label]
             preds.append(prediction)
-
+        
         desired_weights = desired_weights.to(edge_weights.device)
-        class_balancer = class_balancer.to(edge_weights.device)
         
         preds = np.array(preds)
         n_correct = (preds == labels).sum()
         accuracy = n_correct / labels.shape[0]
         
-        # loss = ((edge_weights - desired_weights) ** 2 * class_balancer).mean()
-        loss = ((edge_weights - desired_weights) ** 2 * (1 - accuracy)).mean()
-        
+        loss = ((edge_weights - desired_weights) ** 2).mean()
+        # loss = ((edge_weights - desired_weights) ** 2 * (1 - accuracy)).mean()
+        # loss = -(desired_weights * torch.log(edge_weights) + (1 - desired_weights) * torch.log(1 - edge_weights)).mean()
         # loss = loss_fun(edge_weights, desired_weights)
-        ctx.save_for_backward(edge_weights, desired_weights, class_balancer)
+        ctx.save_for_backward(edge_weights, desired_weights)
         ctx.accuracy = accuracy
         
         return loss
@@ -247,7 +254,7 @@ class MWPMLoss_v3(torch.autograd.Function):
         ctx,
         grad_output,
     ):
-        edge_weights, desired_edge_weights, class_balancer = ctx.saved_tensors
+        edge_weights, desired_edge_weights = ctx.saved_tensors
         accuracy = ctx.accuracy
         grad = edge_weights - desired_edge_weights
         # grad = grad * (1 - accuracy)
@@ -356,12 +363,8 @@ class MWPMLoss_v4(torch.autograd.Function):
     ):
 
         # initialise
+        edge_weights = torch.nn.functional.sigmoid(edge_weights)
         edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
-        
-        # class imbalance
-        n_no_flips = labels.shape[0] - labels.sum()
-        n_flips = labels.sum()
-        class_weight = [1 / (n_no_flips / labels.shape[0]), 1 / (n_flips / labels.shape[0])]
         
         # split edges and edge weights per syndrome
         (
@@ -380,6 +383,7 @@ class MWPMLoss_v4(torch.autograd.Function):
         
         preds = []
         for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
+            
             edges = edges.cpu().numpy()
             weights = weights.cpu().numpy()
             classes = classes.cpu().numpy()
@@ -404,10 +408,8 @@ class MWPMLoss_v4(torch.autograd.Function):
         n_correct = (preds == labels).sum()
         accuracy = n_correct / labels.shape[0]
         
+        loss = -(desired_weights * torch.log(edge_weights) + (1 - desired_weights) * torch.log(1 - edge_weights)).mean()
         
-        loss = ((edge_weights - desired_weights) ** 2).mean()
-        
-        # loss = loss_fun(edge_weights, desired_weights)
         ctx.save_for_backward(edge_weights, desired_weights)
         ctx.accuracy = accuracy
         
@@ -420,6 +422,6 @@ class MWPMLoss_v4(torch.autograd.Function):
     ):
         edge_weights, desired_edge_weights = ctx.saved_tensors
         accuracy = ctx.accuracy
-        grad = edge_weights - desired_edge_weights
+        grad = (edge_weights - desired_edge_weights)
         
         return None, grad, None, None, None
