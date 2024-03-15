@@ -80,7 +80,6 @@ class GraphNN(nn.Module):
         edge_attr,
         detector_labels,
         batch_labels,
-        warmup=False,
     ):
 
         
@@ -303,3 +302,86 @@ class GraphNNV2(nn.Module):
         edge_classes = torch.nested.as_nested_tensor(edge_classes_p_batch)
         
         return edges.unbind(), edge_feat.unbind(), edge_classes.unbind()
+    
+class SimpleGraphNN(nn.Module):
+
+    def __init__(
+        self,
+        hidden_channels_GCN=[32, 64],
+        hidden_channels_MLP=[64],
+        n_node_features=5,
+    ):
+        super().__init__()
+
+        # GCN layers
+        channels = [n_node_features] + hidden_channels_GCN
+        self.graph_layers = nn.ModuleList(
+            [
+                nng.GraphConv(in_channels, out_channels)
+                for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
+            ]
+        )
+    
+        # Dense layers
+        transition_dim = hidden_channels_GCN[-1] * 2 + 1 + 2
+        channels = [transition_dim] + hidden_channels_MLP
+        self.dense_layers = nn.ModuleList(
+            [
+                nn.Linear(in_channels, out_channels)
+                for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
+            ]
+        )
+
+        # Output layer
+        self.output_layer = nn.Linear(hidden_channels_MLP[-1], 1)
+
+        # Layer to split syndrome into X (Z)-graphs
+        self.split_syndromes = SplitSyndromes()
+        
+        # Activation function
+        self.activation = torch.nn.Tanh()
+
+    def forward(
+        self,
+        x,
+        edges,
+        edge_attr,
+        detector_labels,
+    ):
+
+        
+        w = edge_attr[:, [0]]
+        for layer in self.graph_layers:
+            x = layer(x, edges, w)
+            x = self.activation(x)
+        
+        # split syndromes so only X (Z) nodes remain and create an edge embedding
+        edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
+        
+        w = edge_attr[:, [0]]
+        c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
+        
+        x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
+        edge_feat = torch.cat([x_src, w, c, x_dst], dim=-1) 
+        
+        # send the edge features through linear layers
+        for layer in self.dense_layers:
+            edge_feat = layer(edge_feat)
+            edge_feat = self.activation(edge_feat)
+        
+        # output
+        edge_feat = self.output_layer(edge_feat)
+        
+        # save the edges with minimum weights (for each duplicate edge)
+        n_edges = edge_feat.shape[0]
+        edge_feat = torch.cat([edge_feat[::2], edge_feat[1::2]], dim=1)
+        edge_classes = torch.stack([edge_attr[::2, 1], edge_attr[1::2, 1]], dim=1)
+        
+        edge_feat, min_inds = torch.min(edge_feat, dim=1)
+        edge_classes = edge_classes[range(n_edges // 2), min_inds]
+        edges = edges[:, ::2]
+
+        # send edge weights through sigmoid
+        edge_feat = torch.nn.functional.sigmoid(edge_feat)
+        
+        return edges, edge_feat, edge_classes
