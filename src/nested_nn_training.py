@@ -140,7 +140,7 @@ class NestedModelTrainer:
         self.epoch = saved_attributes["training_history"]["epoch"] + 1
         self.model.load_state_dict(saved_attributes["model"])
         self.optimizer.load_state_dict(saved_attributes["optimizer"])
-        self.save_path = Path(self.save_path.name[:-3] + "_load_f_" + model_path.name)
+        self.save_path = self.save_dir / Path(self.save_path.stem + "_load_f_" + model_path.name)
 
         # only keep best found weights
         self.optimal_weights = saved_attributes["model"]
