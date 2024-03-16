@@ -119,6 +119,7 @@ class SimpleTrainer:
             "optimizer": self.optimizer.state_dict(),
             "graph_settings": self.graph_settings,
             "training_settings": self.training_settings,
+            "model_settings": self.model_settings,
         }
 
         torch.save(attributes, self.save_path)
@@ -133,10 +134,10 @@ class SimpleTrainer:
         # older models do not have the attribute "best_val_accuracy"
         if not "best_val_accuracy" in self.training_history:
             self.training_history["best_val_accuracy"] = -1
-        self.epoch = saved_attributes["training_history"]["tot_epochs"] + 1
+        self.epoch = saved_attributes["training_history"]["epoch"] + 1
         self.model.load_state_dict(saved_attributes["model"])
         self.optimizer.load_state_dict(saved_attributes["optimizer"])
-        self.save_name = self.save_name + "_load_f_" + model_path.name.split(sep=".")[0]
+        self.save_path = Path(self.save_path.name[:-3] + "_load_f_" + model_path.name)
 
         # only keep best found weights
         self.optimal_weights = saved_attributes["model"]
