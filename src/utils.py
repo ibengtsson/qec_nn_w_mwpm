@@ -121,6 +121,7 @@ def inference_TEST(
         preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
 
     n_correct = (preds == flips).sum()
+    
     return n_correct
 
 
@@ -145,7 +146,7 @@ def predict_mwpm(
         classes = classes.detach().cpu().numpy()
         p = mwpm_prediction(edges, weights, classes)
         preds.append(p)
-
+        
     return np.array(preds)
 
 
