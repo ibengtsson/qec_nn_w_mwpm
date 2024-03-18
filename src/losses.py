@@ -5,6 +5,9 @@ sys.path.append("../")
 from src.graph import extract_edges
 from src.utils import mwpm_prediction, mwpm_w_grad, mwpm_w_grad_v2
 
+from torch.multiprocessing import Pool
+from torch.multiprocessing import cpu_count
+
 class MWPMLoss(torch.autograd.Function):
     
     # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
@@ -411,7 +414,6 @@ class MWPMLoss_v4(torch.autograd.Function):
         loss = -(desired_weights * torch.log(edge_weights) + (1 - desired_weights) * torch.log(1 - edge_weights)).mean()
         
         ctx.save_for_backward(edge_weights, desired_weights)
-        ctx.accuracy = accuracy
         
         return loss
 
@@ -421,7 +423,84 @@ class MWPMLoss_v4(torch.autograd.Function):
         grad_output,
     ):
         edge_weights, desired_edge_weights = ctx.saved_tensors
-        accuracy = ctx.accuracy
         grad = (edge_weights - desired_edge_weights)
+        
+        return None, grad, None, None, None
+
+def loss_help_wrapper(args):
+    return loss_help(*args)
+
+def loss_help(edges, weights, classes, edge_map, label):
+    
+    edges = edges.cpu().numpy()
+    _weights = weights.cpu().numpy()
+    classes = classes.cpu().numpy()
+
+    prediction, match_mask = mwpm_w_grad_v2(edges, _weights, classes)
+
+    desired_weights = torch.zeros(weights.shape)
+    if prediction == label:
+        desired_weights[~match_mask] = 1
+        desired_weights[match_mask] = 0
+    else:
+        desired_weights[match_mask] = 1
+        desired_weights[~match_mask] = 0
+    
+    loss = (-(desired_weights * torch.log(weights) + (1 - desired_weights) * torch.log(1 - weights))).sum()
+    grad = weights - desired_weights
+    
+    return loss, grad, edge_map
+    
+    
+class MWPMLoss_v4_parallel(torch.autograd.Function):
+
+    # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
+    @staticmethod
+    def forward(
+        ctx,
+        edge_indx: torch.Tensor,
+        edge_weights: torch.Tensor,
+        edge_classes: torch.Tensor,
+        batch_labels: torch.Tensor,
+        labels: np.ndarray,
+    ):
+
+        # initialise
+        edge_weights = torch.nn.functional.sigmoid(edge_weights)
+        edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
+        
+        # split edges and edge weights per syndrome
+        (
+            edges_p_graph,
+            weights_p_graph,
+            classes_p_graph,
+            edge_map_p_graph,
+        ) = extract_edges(
+            edge_indx,
+            edge_attr,
+            batch_labels,
+        )
+        
+        # run mwpm in parallel
+        loss = 0
+        grads = torch.zeros_like(edge_weights)
+        pool = Pool(processes=(cpu_count() - 1))
+        chunksize = int(0.8 * len(edges_p_graph) / (cpu_count() - 1))
+        for res in pool.imap_unordered(loss_help_wrapper, list(zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels)), chunksize=chunksize):
+            _loss, grad, grad_map = res
+            grads[grad_map] = grad
+            loss += _loss
+
+        loss /= edge_weights.shape[0]
+        ctx.save_for_backward(grads)
+        
+        return loss
+
+    @staticmethod
+    def backward(
+        ctx,
+        grad_output,
+    ):
+        grad, = ctx.saved_tensors
         
         return None, grad, None, None, None
