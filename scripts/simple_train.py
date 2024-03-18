@@ -4,10 +4,14 @@ import sys
 sys.path.append("../")
 from src.simple_training import SimpleTrainer
 import os
+import torch
 if "alvis" in os.uname().nodename:
     os.environ["QECSIM_CFG"] = "/cephyr/users/isakbe/Alvis"
 
 def main():
+    
+    # for parallell loss
+    torch.multiprocessing.set_start_method('spawn')
     
     # command line parsing
     parser = argparse.ArgumentParser()
