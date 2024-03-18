@@ -449,7 +449,12 @@ def loss_help(edges, weights, classes, edge_map, label):
     loss = (-(desired_weights * torch.log(weights) + (1 - desired_weights) * torch.log(1 - weights))).sum()
     grad = weights - desired_weights
     
-    return loss, grad, edge_map
+    _loss = loss.clone()
+    _grad = grad.clone()
+    _edge_map = edge_map.clone()
+    
+    del loss, grad, edge_map, desired_weights, weights, edges, classes, match_mask
+    return _loss, _grad, _edge_map
     
 class MWPMLoss_v4_parallel(torch.autograd.Function):
 
