@@ -438,7 +438,7 @@ def loss_help(edges, weights, classes, edge_map, label):
 
     prediction, match_mask = mwpm_w_grad_v2(edges, _weights, classes)
 
-    desired_weights = torch.zeros(weights.shape)
+    desired_weights = torch.zeros_like(weights)
     if prediction == label:
         desired_weights[~match_mask] = 1
         desired_weights[match_mask] = 0
@@ -450,7 +450,6 @@ def loss_help(edges, weights, classes, edge_map, label):
     grad = weights - desired_weights
     
     return loss, grad, edge_map
-    
     
 class MWPMLoss_v4_parallel(torch.autograd.Function):
 
