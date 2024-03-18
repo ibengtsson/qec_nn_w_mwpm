@@ -472,6 +472,83 @@ class LSTrainer:
         epoch_t = datetime.now() - start_t
         print(f"The training took: {epoch_t}, for {n_graphs} graphs.")
 
+    # def train_split_dataset(self):
+    #     dataset_size = self.training_settings["dataset_size"]
+    #     batch_train = self.training_settings["batch_train"]
+    #     search_radius = self.training_settings["search_radius"]
+    #     n_selections = self.training_settings["n_selections"]
+    #     experiment = self.graph_settings["experiment"]
+    #     n_model_params = len(torch.nn.utils.parameters_to_vector(self.model.parameters()))
+    #     n_dim_iter = n_model_params // n_selections
+    #     # training optimizer
+    #     ls = LocalSearch(self.model, search_radius, n_selections, self.device)        
+
+    #     # initialise simulations and graph settings
+    #     m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
+
+    #     sim = self.initialise_sim()
+    #     # generate validation syndromes
+    #     n_val_graphs = self.training_settings["validation_set_size"]
+    #     val_syndromes, val_flips, n_val_identities = self.create_test_set(
+    #         n_graphs=n_val_graphs,
+    #     )
+    #     repeat_selection = self.training_settings["repeat_selection"]
+    #     if repeat_selection:
+    #         n_repetitions = self.training_settings["n_repetitions"]
+    #     else:
+    #         n_repetitions = 1
+    #     syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True)
+    #     # split into chunks to reduce memory footprint later
+    #     n_splits = syndromes.shape[0] // batch_train + 1
+    #     syndromes = np.array_split(syndromes, n_splits)
+    #     flips = np.array_split(flips, n_splits)
+    #     start_t = datetime.now()
+    #     graphs = []
+    #     n_correct = 0
+    #     n_graphs = 0
+    #     for syndrome, flip in zip(syndromes, flips):
+    #         _n_graphs = syndrome.shape[0]
+    #         n_graphs += _n_graphs
+    #         x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+    #         syndrome, m_nearest_nodes, experiment=experiment, device=self.device
+    #         )
+    #         graph = {"x":x, "edge_index":edge_index, "edge_attr":edge_attr, "batch_labels":batch_labels, "detector_labels":detector_labels, "flips":flip}
+    #         graphs.append(graph)
+    #         _n_correct ,top_accuracy, accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flip)
+    #         n_correct += _n_correct
+            
+    #     ls.top_score = n_correct/n_graphs
+    #     self.training_history["train_accuracy"].append(ls.top_score)
+    #     self.training_history["iter_improvement"].append(0)
+    #     print("Number of dimension partitions:",n_dim_iter)
+    #     for i in range(n_dim_iter*n_repetitions):
+    #             old_acc = ls.top_score
+    #             ls.step(x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+    #             new_acc = ls.top_score
+    #             # we add new accuracy and i after each improvement
+    #             if ~np.equal(new_acc, old_acc):
+    #                 print("New best found at iteration:",i)
+    #                 print("New best accuracy:",new_acc)
+    #                 self.training_history["train_accuracy"].append(ls.top_score)
+    #                 self.training_history["iter_improvement"].append(i+1)
+    #                 self.training_history["comb_accuracy"].append(ls.accuracy)
+    #                 # validation
+    #                 val_accuracy, bal_accuracy = self.evaluate_test_set(
+    #                 val_syndromes,
+    #                 val_flips,
+    #                 n_val_identities,
+    #                 n_graphs=n_val_graphs,
+    #                 )
+    #                 self.training_history["val_accuracy"].append(bal_accuracy)
+    #                 if self.save_model:
+    #                     self.save_model_w_training_settings()
+
+    #     # update model to best version after local search
+    #     # nn.utils.vector_to_parameters(ls.elite, self.model.parameters())
+               
+    #     epoch_t = datetime.now() - start_t
+    #     print(f"The training took: {epoch_t}, for {n_graphs} graphs.")
+
 
     def get_training_metrics(self):
 

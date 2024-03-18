@@ -3,7 +3,7 @@ import torch
 import argparse
 import sys
 sys.path.append("../")
-from src.models import GraphNN
+from src.models import GraphNN, SimpleGraphNN
 from src.training import LSTrainer
 import os
 os.environ["QECSIM_CFG"] = "/cephyr/users/fridafj/Alvis"
@@ -17,7 +17,8 @@ def main():
     args = parser.parse_args() 
     
     # create a model
-    model = GraphNN()
+    #model = GraphNN()
+    model = SimpleGraphNN()
     config = Path(args.configuration)
     
     # check if model should be saved

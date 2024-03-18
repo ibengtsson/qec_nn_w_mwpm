@@ -94,6 +94,50 @@ class LocalSearch:
             # decay to escape local maxima
             #self.top_score -= 0.002
 
+    # def step_test(self, x, t, loss_fcn):
+    #     self.set_value()
+    #     self.set_noise()
+    #     self.vector[self.value] = self.vector[self.value] + self.magnitude
+    #     self.update_weights(self.model)
+    #     new_pred = self.model(x)
+    #     loss = loss_fcn(new_pred, t)
+    #     if loss < self.top_score:
+    #         self.set_elite()
+    #         self.top_score = loss
+    #     else:
+    #         self.set_vector()
+    #     self.idx += 1
+    #     if loss < 1000:
+    #         self.search_radius = 0.01
+
+    # def step_split_data(self, graphs):
+    #      #print(self.vector)
+    #     self.set_value()
+    #     self.set_noise()
+    #     #self.set_noise_vector()
+    #     self.vector[self.value] = self.vector[self.value] + self.magnitude
+    #     self.update_weights(self.model)
+    #     n_correct = 0
+    #     for graph in graphs:
+    #         x = graph["x"]
+    #         edge_index = graph["edge_index"]
+    #         edge_attr = graph["edge_attr"]
+    #         batch_labels = graph["batch_labels"]
+    #         detector_labels = graph["detector_labels"]
+    #         flips = graph["flips"]
+    #         _n_correct, new_accuracy, accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+    #         n_correct += _n_correct
+    #     if new_accuracy > self.top_score:
+    #         self.set_elite()
+    #         self.top_score = new_accuracy
+    #         self.accuracy = accuracy
+    #     else:
+    #         self.set_vector()
+    #     self.idx += 1
+    #     #self.update_weights(self.model)
+    #         # decay to escape local maxima
+    #         #self.top_score -= 0.002
+
 
     def return_topscore(self):
         return self.top_score
