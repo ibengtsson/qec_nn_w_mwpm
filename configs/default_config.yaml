@@ -1,16 +1,11 @@
 paths:
   save_dir: ../training_outputs/
-  saved_model_path: 
+  saved_model_path: ../training_outputs/d5_d_t_5_240316-142335_load_f_d5_d_t_5_240315-152724.pt  
 model_settings:
   hidden_channels_GCN: 
+    - 32
     - 64
-    - 128
-    - 256
-    - 512
   hidden_channels_MLP:
-    - 512
-    - 256
-    - 128 
     - 64
 graph_settings:
   experiment: "z"
@@ -26,10 +21,10 @@ training_settings:
   seed: Null
   dataset_size: 1000000
   validation_set_size: 30000
-  batch_size: 20000
-  tot_epochs: 1000
-  lr: 0.0001
+  batch_size: 100000
+  tot_epochs: 1500
+  lr: 0.00001
   device: cuda
-  resume_training: False
-  current_epoch: 0
-  comment: "Simple but larg:ish network."
+  resume_training: True
+  current_epoch: 1000
+  comment: "Small."
