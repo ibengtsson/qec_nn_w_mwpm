@@ -1,12 +1,14 @@
 paths:
   save_dir: ../training_outputs/
-  saved_model_path: ../training_outputs/d5_d_t_5_240316-142335_load_f_d5_d_t_5_240315-152724.pt  
+  saved_model_path: ../training_outputs/d5_d_t_5_240316-225757.pt  
 model_settings:
   hidden_channels_GCN: 
-    - 32
     - 64
+    - 128
+    - 256
+    - 512
   hidden_channels_MLP:
-    - 64
+    - 256
 graph_settings:
   experiment: "z"
   code_size: 5
@@ -22,9 +24,9 @@ training_settings:
   dataset_size: 1000000
   validation_set_size: 30000
   batch_size: 100000
-  tot_epochs: 1500
-  lr: 0.00001
+  tot_epochs: 2000
+  lr: 0.0001
   device: cuda
   resume_training: True
   current_epoch: 1000
-  comment: "Small."
+  comment: "Continuation."
