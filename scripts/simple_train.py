@@ -4,14 +4,10 @@ import sys
 sys.path.append("../")
 from src.simple_training import SimpleTrainer
 import os
-import torch
 if "alvis" in os.uname().nodename:
     os.environ["QECSIM_CFG"] = "/cephyr/users/isakbe/Alvis"
 
 def main():
-    
-    # for parallell loss
-    torch.multiprocessing.set_start_method('spawn')
     
     # command line parsing
     parser = argparse.ArgumentParser()
@@ -34,18 +30,18 @@ def main():
     trainer = SimpleTrainer(config=config, save_model=save_or_not, seeds=False)
     
     # measure a benchmark
-    print("BEFORE TRAINING:")
-    _, _, confusion_df = trainer.check_performance()
-    print(confusion_df)
+    # print("BEFORE TRAINING:")
+    # _, _, confusion_df = trainer.check_performance()
+    # print(confusion_df)
 
     # train model
     trainer.train()
     
     # check performance
-    print("AFTER TRAINING:")
-    _, _, confusion_df = trainer.check_performance()
+    # print("AFTER TRAINING:")
+    # _, _, confusion_df = trainer.check_performance()
     
-    print(confusion_df)
+    # print(confusion_df)
     
 
 if __name__ == "__main__":
