@@ -28,7 +28,7 @@ training_settings:
   seed: Null
   dataset_size: 1000000
   validation_set_size: 30000
-  batch_size: 40000
+  batch_size: 20000
   tot_epochs: 1000
   lr: 0.0001
   device: cuda
