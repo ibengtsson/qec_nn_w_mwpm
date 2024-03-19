@@ -428,13 +428,14 @@ class MWPMLoss_v4(torch.autograd.Function):
         return None, grad, None, None, None
 
 def loss_help_wrapper(args):
+    print("Thread start")
     return loss_help(*args)
 
 def loss_help(edges, weights, classes, edge_map, label):
     
-    edges = edges.cpu().numpy()
-    _weights = weights.cpu().numpy()
-    classes = classes.cpu().numpy()
+    edges = edges.numpy()
+    _weights = weights.numpy()
+    classes = classes.numpy()
 
     prediction, match_mask = mwpm_w_grad_v2(edges, _weights, classes)
 
@@ -448,13 +449,8 @@ def loss_help(edges, weights, classes, edge_map, label):
     
     loss = (-(desired_weights * torch.log(weights) + (1 - desired_weights) * torch.log(1 - weights))).sum()
     grad = weights - desired_weights
-    
-    _loss = loss.clone()
-    _grad = grad.clone()
-    _edge_map = edge_map.clone()
-    
-    del loss, grad, edge_map, desired_weights, weights, edges, classes, match_mask
-    return _loss, _grad, _edge_map
+
+    return loss, grad, edge_map
     
 class MWPMLoss_v4_parallel(torch.autograd.Function):
 
@@ -473,6 +469,11 @@ class MWPMLoss_v4_parallel(torch.autograd.Function):
         edge_weights = torch.nn.functional.sigmoid(edge_weights)
         edge_attr = torch.stack([edge_weights, edge_classes], dim=1)
         
+        # move data from CUDA
+        edge_indx = edge_indx.cpu()
+        edge_attr = edge_attr.cpu()
+        batch_labels = batch_labels.cpu()
+        
         # split edges and edge weights per syndrome
         (
             edges_p_graph,
@@ -487,15 +488,18 @@ class MWPMLoss_v4_parallel(torch.autograd.Function):
         
         # run mwpm in parallel
         loss = 0
-        grads = torch.zeros_like(edge_weights)
-        pool = Pool(processes=(cpu_count() - 1))
-        chunksize = int(0.8 * len(edges_p_graph) / (cpu_count() - 1))
+        grads = torch.zeros(edge_weights.shape)
+        n_processes = cpu_count() - 1
+        pool = Pool(processes=n_processes)
+        chunksize = int(0.8 * len(edges_p_graph) / n_processes)
         for res in pool.imap_unordered(loss_help_wrapper, list(zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels)), chunksize=chunksize):
             _loss, grad, grad_map = res
             grads[grad_map] = grad
             loss += _loss
 
         loss /= edge_weights.shape[0]
+        loss = loss.to(edge_weights.device)
+        grads = grads.to(edge_weights.device)
         ctx.save_for_backward(grads)
         
         return loss
