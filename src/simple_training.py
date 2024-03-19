@@ -12,7 +12,7 @@ from src.utils import parse_yaml, inference_TEST, predict_mwpm
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
 from src.models import SimpleGraphNN
-from src.losses import MWPMLoss_v4, MWPMLoss_v4_parallel
+from src.losses import MWPMLoss_v4
 
 
 class SimpleTrainer:
@@ -71,7 +71,10 @@ class SimpleTrainer:
         ):
             torch.cuda.set_device(self.device)
 
-        self.model = SimpleGraphNN().to(self.device)
+        self.model = SimpleGraphNN(
+            hidden_channels_GCN=model_settings["hidden_channels_GCN"],
+            hidden_channels_MLP=model_settings["hidden_channels_MLP"],
+        ).to(self.device)
         
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), lr=training_settings["lr"])
@@ -260,7 +263,7 @@ class SimpleTrainer:
         n_batches = dataset_size // batch_size
         
         # set loss function
-        loss_fun = MWPMLoss_v4_parallel.apply
+        loss_fun = MWPMLoss_v4.apply
         
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
