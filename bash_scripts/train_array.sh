@@ -8,4 +8,4 @@
 
 # purge any modules
 module purge
-apptainer exec ~/containers/torch/PyG_new.sif python ../scripts/train.py -c ../configs/defaults/config_${SLURM_ARRAY_TASK_ID}.yaml --save
+apptainer exec ~/containers/torch/PyG_new.sif python ../scripts/simple_train.py -c ../configs/defaults/config_${SLURM_ARRAY_TASK_ID}.yaml --save
