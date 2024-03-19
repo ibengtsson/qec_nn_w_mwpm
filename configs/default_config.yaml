@@ -1,14 +1,23 @@
 paths:
   save_dir: ../training_outputs/
-  saved_model_path: ../training_outputs/d5_d_t_5_240316-225757.pt  
+  saved_model_path:  
 model_settings:
-  hidden_channels_GCN: 
-    - 64
+  hidden_channels_GCN:
+    - 32
+    - 64 
     - 128
     - 256
     - 512
+    - 1024
+    - 2048
   hidden_channels_MLP:
+    - 2048
+    - 1024
+    - 512
     - 256
+    - 128
+    - 64
+    - 32
 graph_settings:
   experiment: "z"
   code_size: 5
@@ -23,10 +32,10 @@ training_settings:
   seed: Null
   dataset_size: 1000000
   validation_set_size: 30000
-  batch_size: 100000
+  batch_size: 250000
   tot_epochs: 2000
   lr: 0.0001
   device: cuda
-  resume_training: True
-  current_epoch: 1000
-  comment: "Continuation."
+  resume_training: False
+  current_epoch: 0
+  comment: "Very big network test, biggest to date."
