@@ -6,7 +6,11 @@ model_settings:
     - 32
     - 64
     - 128
-  hidden_channels_MLP: 
+    - 256
+    - 512
+  hidden_channels_MLP:
+    - 256
+    - 128 
     - 64
 graph_settings:
   experiment: "z"
@@ -22,7 +26,7 @@ training_settings:
   seed: Null
   dataset_size: 1000000
   validation_set_size: 30000
-  batch_size: 200000
+  batch_size: 80000
   tot_epochs: 1000
   lr: 0.0001
   device: cuda

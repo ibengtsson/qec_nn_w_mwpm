@@ -1,5 +1,5 @@
 paths:
-  save_dir: ../../training_outputs/
+  save_dir: ../training_outputs/
   saved_model_path: 
 model_settings:
   hidden_channels_GCN: 
@@ -7,11 +7,7 @@ model_settings:
     - 64
     - 128
     - 256
-    - 512
   hidden_channels_MLP: 
-    - 512
-    - 256
-    - 128
     - 64
 graph_settings:
   experiment: "z"
@@ -26,12 +22,12 @@ graph_settings:
 training_settings:
   seed: Null
   dataset_size: 1000000
-  validation_set_size: 10000
-  batch_size: 20000
-  tot_epochs: 300
-  lr: 0.01
+  validation_set_size: 30000
+  batch_size: 150000
+  tot_epochs: 1000
+  lr: 0.0001
   device: cuda
   resume_training: False
   current_epoch: 0
-  comment: "Not nested, no accuracy scaling in loss"
+  comment: "Simple but larger nn. Part of trial trying out larger architectures."
 
