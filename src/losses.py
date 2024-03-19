@@ -7,6 +7,8 @@ from src.utils import mwpm_prediction, mwpm_w_grad, mwpm_w_grad_v2
 
 from torch.multiprocessing import Pool
 from torch.multiprocessing import cpu_count
+import logging
+logging.disable(sys.maxsize)
 
 class MWPMLoss(torch.autograd.Function):
     
