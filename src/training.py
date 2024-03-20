@@ -11,8 +11,8 @@ import pandas as pd
 from src.utils import parse_yaml, inference, predict_mwpm, predict_mwpm_nested
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import GraphNN, GraphAttention, GraphNNV2
-from src.losses import MWPMLoss, MWPMLoss_v2, MWPMLoss_v3, NestedMWPMLoss
+from src.models import GraphNN, GraphAttention, GraphNNV2, SimpleGraphNNV3
+from src.losses import MWPMLoss, MWPMLoss_v2, MWPMLoss_v3, NestedMWPMLoss, MWPMLoss_v4
 
 
 class ModelTrainer:
@@ -71,7 +71,7 @@ class ModelTrainer:
         ):
             torch.cuda.set_device(self.device)
 
-        self.model = GraphNN(
+        self.model = SimpleGraphNNV3(
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],
             hidden_channels_MLP=model_settings["hidden_channels_MLP"],
         ).to(self.device)
@@ -263,7 +263,7 @@ class ModelTrainer:
         n_batches = dataset_size // batch_size
         
         # set loss function
-        loss_fun = MWPMLoss_v3.apply
+        loss_fun = MWPMLoss_v4.apply
         
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
