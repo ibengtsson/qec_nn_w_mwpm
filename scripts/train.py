@@ -6,6 +6,8 @@ sys.path.append("../")
 from src.models import GraphNN, SimpleGraphNN
 from src.training import LSTrainer, LSTrainer_v2
 import os
+import logging
+logging.disable(sys.maxsize)
 os.environ["QECSIM_CFG"] = "/cephyr/users/fridafj/Alvis"
 
 
