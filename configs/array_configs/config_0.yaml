@@ -13,6 +13,7 @@ graph_settings:
   power: 2
   n_classes: 1
 training_settings:
+  comment: ""
   seed: Null
   dataset_size: 100000 # both, should change
   validation_set_size: 10000
@@ -21,7 +22,7 @@ training_settings:
   tot_epochs: 10
   n_selections: 100
   repeat_selection: True
-  n_repetitions: 6
+  n_repetitions: 12
   search_radius: 0.01
   warmup_lr: 0.001
   lr: 0.0001

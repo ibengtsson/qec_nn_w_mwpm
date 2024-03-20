@@ -4,7 +4,7 @@ import argparse
 import sys
 sys.path.append("../")
 from src.models import GraphNN, SimpleGraphNN
-from src.training import LSTrainer
+from src.training import LSTrainer, LSTrainer_v2
 import os
 os.environ["QECSIM_CFG"] = "/cephyr/users/fridafj/Alvis"
 
@@ -30,9 +30,9 @@ def main():
         print("Model will not be saved.")
     
     # train model
-    trainer = LSTrainer(model, config=config, save_model=save_or_not)
+    trainer = LSTrainer_v2(model, config=config, save_model=save_or_not)
     #trainer.train_warmup()
-    trainer.train_v2()
+    trainer.train()
     
     acc, logical_accuracy, acc2 = trainer.get_training_metrics()
     

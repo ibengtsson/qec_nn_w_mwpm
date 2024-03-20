@@ -13,6 +13,359 @@ from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
 from src.local_search import LocalSearch
 
+# new local search trainer for training with no epochs and split datasets
+class LSTrainer_v2:
+    def __init__(
+        self,
+        model: nn.Module,
+        config: os.PathLike = None,
+        save_model: bool = True, 
+    ):
+        # load and initialise settings
+        paths, graph_settings, training_settings = parse_yaml(config)
+        self.save_dir = Path(paths["save_dir"])
+        self.saved_model_path = paths["saved_model_path"]
+        self.graph_settings = graph_settings
+        self.training_settings = training_settings
+        self.save_model = save_model
+        if "cuda" in training_settings["device"]:
+            self.device = torch.device(
+                training_settings["device"] if torch.cuda.is_available() else "cpu"
+            )
+        else:
+            self.device = torch.device("cpu")
+
+        print(f"Running model on {self.device} with dataset size {self.training_settings['dataset_size']}.")
+        # create a dictionary saving training metrics
+        training_history = {}
+        training_history["train_accuracy"] = []
+        training_history["val_accuracy"] = []
+        training_history["comb_accuracy"] = []
+        training_history["best_val_accuracy"] = -1
+        training_history["iter_improvement"] = []
+        self.training_history = training_history
+
+        # move model to correct device
+        self.model = model.to(self.device)
+
+        # generate a unique name to not overwrite other models
+        name = (
+            "d"
+            + str(graph_settings["code_size"])
+            + "_d_t_"
+            + str(graph_settings["repetitions"])
+            + "_"
+        )
+        current_datetime = datetime.now().strftime("%y%m%d-%H%M%S")
+        suffix = training_settings["comment"]
+        self.save_name = name + current_datetime + "_" + suffix
+        # check if model should be loaded
+        if training_settings["resume_training"]:
+            self.load_trained_model()
+
+    def save_model_w_training_settings(self, model_name=None):
+
+        # make sure path exists, else create it
+        self.save_dir.mkdir(parents=True, exist_ok=True)
+        if model_name is not None:
+            path = self.save_dir / (model_name + ".pt")
+        else:
+            path = self.save_dir / (self.save_name + ".pt")
+
+        # we only want to save the weights that corresponds to the best found accuracy
+            # CHANGE THIS!!
+        if (
+            self.training_history["balanced_acc_val"][-1]
+            > self.training_history["best_val_accuracy"]
+        ):
+            self.training_history["best_val_accuracy"] = self.training_history[
+                "val_accuracy"
+            ][-1]
+            self.optimal_weights = self.model.state_dict()
+
+        attributes = {
+            "training_history": self.training_history,
+            "model": self.optimal_weights,
+            "model_vec": nn.utils.parameters_to_vector(self.model),
+            "graph_settings": self.graph_settings,
+            "training_settings": self.training_settings,
+        }
+
+        torch.save(attributes, path)
+
+    def load_trained_model(self):
+        model_path = Path(self.saved_model_path)
+        saved_attributes = torch.load(model_path, map_location=self.device)
+
+        # update attributes and load model with trained weights
+        self.training_history = saved_attributes["training_history"]
+
+        # older models do not have the attribute "best_val_accuracy"
+        if not "best_val_accuracy" in self.training_history:
+            self.training_history["best_val_accuracy"] = -1
+        self.model.load_state_dict(saved_attributes["model"])
+        self.save_name = self.save_name + "_load_f_" + model_path.name.split(sep=".")[0]
+
+        # only keep best found weights
+        self.optimal_weights = saved_attributes["model"]
+
+    # used for getting only one error probability sim
+    def initialise_sim(self):
+        # simulation settings
+        code_size = self.graph_settings["code_size"]
+        reps = self.graph_settings["repetitions"]
+        dataset_size = self.training_settings["dataset_size"]
+        p = self.graph_settings["one_error_rate"]
+
+        task_dict = {
+            "z": "surface_code:rotated_memory_z",
+            "x": "surface_code:rotated_memory_x",
+        }
+        code_task = task_dict[self.graph_settings["experiment"]]
+
+        sim = SurfaceCodeSim(
+                reps,
+                code_size,
+                p,
+                dataset_size,
+                code_task=code_task,
+            )
+
+        return sim
+    
+    # used for getting multiple different error probabilities in data set
+    def init_multi_error_p(self, n=5):  # check for comp with warmup
+        # simulation settings
+        code_size = self.graph_settings["code_size"]
+        reps = self.graph_settings["repetitions"]
+        dataset_size = self.training_settings["dataset_size"]
+
+        min_error_rate = self.graph_settings["min_error_rate"]
+        max_error_rate = self.graph_settings["max_error_rate"]
+
+        error_rates = np.linspace(min_error_rate, max_error_rate, n)
+
+        task_dict = {
+            "z": "surface_code:rotated_memory_z",
+            "x": "surface_code:rotated_memory_x",
+        }
+        code_task = task_dict[self.graph_settings["experiment"]]
+
+        sims = []
+        for p in error_rates:
+            sim = SurfaceCodeSim(
+                reps,
+                code_size,
+                p,
+                dataset_size,
+                code_task=code_task,
+            )
+            sims.append(sim)
+
+        return sims
+    
+    # create a split test set used for validation
+    def create_test_set(self, n_graphs=5e5, n=5):
+        
+        # simulation settings
+        code_size = self.graph_settings["code_size"]
+        reps = self.graph_settings["repetitions"]
+        min_error_rate = self.graph_settings["min_error_rate"]
+        max_error_rate = self.graph_settings["max_error_rate"]
+
+        error_rates = np.linspace(min_error_rate, max_error_rate, n)
+
+        task_dict = {
+            "z": "surface_code:rotated_memory_z",
+            "x": "surface_code:rotated_memory_x",
+        }
+        code_task = task_dict[self.graph_settings["experiment"]]
+
+        syndromes = []
+        flips = []
+        n_identities = 0
+        for p in error_rates:
+            sim = SurfaceCodeSim(
+                reps,
+                code_size,
+                p,
+                int(n_graphs / n),
+                code_task=code_task,
+            )
+            syndrome, flip, n_id = sim.generate_syndromes(use_for_mwpm=True)
+            syndromes.append(syndrome)
+            flips.append(flip)
+            n_identities += n_id
+
+        syndromes = np.concatenate(syndromes)
+        flips = np.concatenate(flips)
+
+        # split into chunks to reduce memory footprint later
+        batch_size = self.training_settings["batch_size"]   # maybe change?
+        n_splits = syndromes.shape[0] // batch_size + 1
+
+        syndromes = np.array_split(syndromes, n_splits)
+        flips = np.array_split(flips, n_splits)
+
+        return syndromes, flips, n_identities
+    
+    # create a split set of syndromes used for training, one error prob only
+    def create_split_train_set(self):
+        
+        # simulation settings
+        code_size = self.graph_settings["code_size"]
+        reps = self.graph_settings["repetitions"]
+        one_error_rate = self.graph_settings["one_error_rate"]
+        dataset_size = self.training_settings["dataset_size"]
+
+        task_dict = {
+            "z": "surface_code:rotated_memory_z",
+            "x": "surface_code:rotated_memory_x",
+        }
+        code_task = task_dict[self.graph_settings["experiment"]]
+
+        syndromes = []
+        flips = []
+        n_identities = 0
+        sim = SurfaceCodeSim(
+                reps,
+                code_size,
+                one_error_rate,
+                dataset_size,
+                code_task=code_task,
+        )
+        syndromes, flips, n_id = sim.generate_syndromes(use_for_mwpm=True)
+
+        # split into chunks to reduce memory footprint later
+        batch_size_train = self.training_settings["batch_size_train"] 
+        n_splits = syndromes.shape[0] // batch_size_train + 1
+
+        syndromes = np.array_split(syndromes, n_splits)
+        flips = np.array_split(flips, n_splits)
+
+        return syndromes, flips, n_identities
+    
+    def create_graph_set(self, syndromes, flips, n_identities):
+        m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
+        experiment = self.graph_settings["experiment"]
+        graph_sets = []
+        for syndrome_set, flip_set in zip(syndromes, flips):
+            x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+            syndrome_set, m_nearest_nodes, experiment=experiment, device=self.device
+            )
+            graph = {
+                "x": x,
+                "edge_index": edge_index,
+                "edge_attr": edge_attr,
+                "batch_labels": batch_labels,
+                "detector_labels": detector_labels,
+                "flips": flip_set
+            }
+            graph_sets.append(graph)
+        return graph_sets
+
+    
+    def evaluate_test_set(self, syndromes, flips, n_identities, n_graphs=5e4):
+        # is n_graphs=n_syndromes? i dont think so
+        m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
+        n_correct_preds = 0
+        bal_acc = 0
+        for syndrome, flip in zip(syndromes, flips):
+            # this should maybe be changed to ls_inference and graphs generated before
+            _n_correct_preds, _bal_acc = inference(
+                self.model,
+                syndrome,
+                flip,
+                experiment=self.graph_settings["experiment"],
+                m_nearest_nodes=m_nearest_nodes,
+                device=self.device,
+            )
+            n_correct_preds += _n_correct_preds
+            bal_acc += _bal_acc
+        val_accuracy = (n_correct_preds + n_identities) / n_graphs
+        bal_accuracy = bal_acc/len(syndromes)
+        return val_accuracy, bal_accuracy
+    
+    def train(self):
+        search_radius = self.training_settings["search_radius"]
+        n_selections = self.training_settings["n_selections"]
+        experiment = self.graph_settings["experiment"]
+        n_model_params = len(torch.nn.utils.parameters_to_vector(self.model.parameters()))
+        n_dim_iter = n_model_params // n_selections
+
+        # initialize local search model
+        ls = LocalSearch(self.model, search_radius, n_selections, self.device)        
+
+        # generate validation syndromes
+        n_val_graphs = self.training_settings["validation_set_size"]
+        val_syndromes, val_flips, n_val_identities = self.create_test_set(
+            n_graphs=n_val_graphs,
+        )
+        val_graphs = self.create_graph_set(val_syndromes, val_flips, n_val_identities)
+        repeat_selection = self.training_settings["repeat_selection"]
+        if repeat_selection:
+            n_repetitions = self.training_settings["n_repetitions"]
+        else:
+            n_repetitions = 1
+        syndromes, flips, n_trivial = self.create_split_train_set()
+        #n_graphs = syndromes.shape[0]
+        start_t = datetime.now()
+        graph_set = self.create_graph_set(syndromes, flips, n_trivial)
+        # n_correct = 0
+        # n_graphs = 0
+        # for graph in graph_set:
+        #     x = graph["x"]
+        #     edge_index = graph["edge_index"]
+        #     edge_attr = graph["edge_attr"]
+        #     batch_labels= graph["batch_labels"]
+        #     detector_labels = graph["detector_labels"]
+        #     flips = graph["flips"]
+        #     _n_graphs = len(flips)
+        #     n_graphs += _n_graphs
+        #     _n_correct, top_accuracy, accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+        #     n_correct += _n_correct
+    
+        # # ls.top_score = n_correct/n_graphs
+        # self.training_history["train_accuracy"].append(ls.top_score)
+        # self.training_history["iter_improvement"].append(0)
+        print("Number of dimension partitions:",n_dim_iter)
+        for i in range(n_dim_iter*n_repetitions):
+                old_acc = ls.top_score
+                ls.step_split_data(graph_set)
+                new_acc = ls.top_score
+                # we add new accuracy and i after each improvement
+                if ~np.equal(new_acc, old_acc):
+                    print("New best found at iteration:",i)
+                    print("New best accuracy:",new_acc)
+                    self.training_history["train_accuracy"].append(ls.top_score)
+                    self.training_history["iter_improvement"].append(i)
+                    self.training_history["comb_accuracy"].append(ls.accuracy)
+                    # validation
+                    n_correct_val = 0
+                    n_val_graphs = 0
+                    for graph in val_graphs:
+                        x = graph["x"]
+                        edge_index = graph["edge_index"]
+                        edge_attr = graph["edge_attr"]
+                        batch_labels= graph["batch_labels"]
+                        detector_labels = graph["detector_labels"]
+                        flips = graph["flips"]
+                        _n_graphs = len(flips)
+                        n_val_graphs += _n_graphs
+                        _n_correct, top_accuracy, accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+                        n_correct_val += _n_correct
+                    val_accuracy = n_correct_val/n_val_graphs
+                    self.training_history["val_accuracy"].append(val_accuracy)
+                    if self.save_model:
+                        self.save_model_w_training_settings()
+
+        # update model to best version after local search
+        # nn.utils.vector_to_parameters(ls.elite, self.model.parameters())
+               
+        epoch_t = datetime.now() - start_t
+        print(f"The training took: {epoch_t}")
+               
+
 class LSTrainer:
 
     def __init__(
@@ -29,6 +382,8 @@ class LSTrainer:
         self.graph_settings = graph_settings
         self.training_settings = training_settings
         self.save_model = save_model
+        
+        
         self.accuracy = []
 
         # current training status
@@ -119,9 +474,15 @@ class LSTrainer:
         # older models do not have the attribute "best_val_accuracy"
         if not "best_val_accuracy" in self.training_history:
             self.training_history["best_val_accuracy"] = -1
-        self.epoch = saved_attributes["training_history"]["tot_epochs"] + 1
+        if not "train_accuracy" in self.training_history:
+            self.training_history["train_accuracy"] = []
+        if not "iter_improvement" in self.training_history:
+            self.training_history["iter_improvement"] = []
+        if not "comb_accuracy" in self.training_history:
+            self.training_history["comb_accuracy"] = []
+        #self.epoch = saved_attributes["training_history"]["tot_epochs"] + 1
         self.model.load_state_dict(saved_attributes["model"])
-        self.optimizer.load_state_dict(saved_attributes["optimizer"])
+        #self.optimizer.load_state_dict(saved_attributes["optimizer"])
         self.save_name = self.save_name + "_load_f_" + model_path.name.split(sep=".")[0]
 
         # only keep best found weights

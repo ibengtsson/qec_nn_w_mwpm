@@ -1,7 +1,7 @@
 import stim
 import numpy as np
 
-from src.graph import get_3D_graph
+#from src.graph import get_3D_graph
 
 
 class QECCodeSim:
@@ -157,59 +157,4 @@ class SurfaceCodeSim(QECCodeSim):
 
         return syndromes, flips, n_trivial_preds
 
-    def generate_batch(
-        self,
-        m_nearest_nodes,
-        power,
-    ):
-        """
-        Generates a batch of graphs from a list of stim experiments.
-        """
-        batch = []
-        stim_data_list = []
-        observable_flips_list = []
 
-        stim_data, observable_flips, n_trivial = self.sample_syndromes(self.n_shots)
-        mask = self.syndrome_mask()
-        detector_coordinates = self.get_detector_coords()
-
-        stim_data_list.extend(stim_data[: self.n_shots])
-        observable_flips_list.extend(observable_flips[: self.n_shots])
-
-        for i in range(len(stim_data_list)):
-            # convert to syndrome grid:
-            syndrome = self.stim_to_syndrome_3D(
-                mask, detector_coordinates, stim_data_list[i]
-            )
-            # get the logical equivalence class:
-            true_eq_class = np.array([int(observable_flips_list[i])])
-            # map to graph representation
-            graph = get_3D_graph(
-                syndrome_3D=syndrome,
-                target=true_eq_class,
-                power=power,
-                m_nearest_nodes=m_nearest_nodes,
-                use_knn=False,
-            )
-            batch.append(graph)
-        return batch, n_trivial
-
-    def stim_to_syndrome_3D(self, mask, coordinates, stim_data):
-        """
-        Converts a stim detection event array to a syndrome grid.
-        1 indicates a violated X-stabilizer, 3 a violated Z stabilizer.
-        Only the difference between two subsequent cycles is stored.
-        """
-        # initialize grid:
-        syndrome_3D = np.zeros_like(mask)
-
-        # first to last time-step:
-        syndrome_3D[coordinates[:, 1], coordinates[:, 0], coordinates[:, 2]] = stim_data
-
-        # only store the difference in two subsequent syndromes:
-        syndrome_3D[:, :, 1:] = (syndrome_3D[:, :, 1:] - syndrome_3D[:, :, 0:-1]) % 2
-
-        # convert X (Z) stabilizers to 1(3) entries in the matrix
-        syndrome_3D[np.nonzero(syndrome_3D)] = mask[np.nonzero(syndrome_3D)]
-
-        return syndrome_3D
