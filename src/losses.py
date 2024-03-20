@@ -395,7 +395,6 @@ class MWPMLoss_v4(torch.autograd.Function):
             edge_map = edge_map.cpu()
 
             prediction, match_mask = mwpm_w_grad_v2(edges, weights, classes)
-
             _desired_weights = torch.zeros(weights.shape)
             if prediction == label:
                 _desired_weights[~match_mask] = 1
@@ -413,8 +412,11 @@ class MWPMLoss_v4(torch.autograd.Function):
         n_correct = (preds == labels).sum()
         accuracy = n_correct / labels.shape[0]
         
-        loss = -(desired_weights * torch.log(edge_weights) + (1 - desired_weights) * torch.log(1 - edge_weights)).mean()
         
+        first_log = torch.clamp(torch.log(edge_weights), min=-100, max=None)
+        second_log = torch.clamp(torch.log(1 - edge_weights), min=-100, max=None)
+        loss = (-(desired_weights * first_log + (1 - desired_weights) * second_log)).mean()
+
         ctx.save_for_backward(edge_weights, desired_weights)
         
         return loss
