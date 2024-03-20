@@ -52,11 +52,7 @@ class LSTrainer_v2:
 
         # generate a unique name to not overwrite other models
         name = (
-            "d"
-            + str(graph_settings["code_size"])
-            + "_d_t_"
-            + str(graph_settings["repetitions"])
-            + "_"
+            "model_"
         )
         current_datetime = datetime.now().strftime("%y%m%d-%H%M%S")
         suffix = training_settings["suffix"]
@@ -74,16 +70,7 @@ class LSTrainer_v2:
         else:
             path = self.save_dir / (self.save_name + ".pt")
 
-        # we only want to save the weights that corresponds to the best found accuracy
-            # CHANGE THIS!!
-        if (
-            self.training_history["balanced_acc_val"][-1]
-            > self.training_history["best_val_accuracy"]
-        ):
-            self.training_history["best_val_accuracy"] = self.training_history[
-                "val_accuracy"
-            ][-1]
-            self.optimal_weights = self.model.state_dict()
+        self.optimal_weights = self.model.state_dict()
 
         attributes = {
             "training_history": self.training_history,
