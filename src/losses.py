@@ -386,6 +386,9 @@ class MWPMLoss_v4(torch.autograd.Function):
         # we must loop through every graph since each one will have given a new set of edge weights
         desired_weights = torch.zeros_like(edge_weights, device="cpu")
         
+        # TEST
+        bias_reversal = torch.zeros_like(edge_weights, device="cpu")
+        
         preds = []
         for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
             
@@ -396,17 +399,25 @@ class MWPMLoss_v4(torch.autograd.Function):
 
             prediction, match_mask = mwpm_w_grad_v2(edges, weights, classes)
             _desired_weights = torch.zeros(weights.shape)
+            _bias_reversal = torch.zeros(weights.shape)
+            
             if prediction == label:
                 _desired_weights[~match_mask] = 1
                 _desired_weights[match_mask] = 0
             else:
                 _desired_weights[match_mask] = 1
                 _desired_weights[~match_mask] = 0
-                
+            
+            _bias_reversal[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
+            _bias_reversal[match_mask] = edges.shape[1] / np.maximum((match_mask).sum(), 1)
             desired_weights[edge_map] = _desired_weights
+            bias_reversal[edge_map] = _bias_reversal
             preds.append(prediction)
+            
+           
 
         desired_weights = desired_weights.to(edge_weights.device)
+        bias_reversal = bias_reversal.to(edge_weights.device)
         
         preds = np.array(preds)
         n_correct = (preds == labels).sum()
@@ -415,9 +426,9 @@ class MWPMLoss_v4(torch.autograd.Function):
         
         first_log = torch.clamp(torch.log(edge_weights), min=-100, max=None)
         second_log = torch.clamp(torch.log(1 - edge_weights), min=-100, max=None)
-        loss = (-(desired_weights * first_log + (1 - desired_weights) * second_log)).mean()
+        loss = (-(desired_weights * first_log + (1 - desired_weights) * second_log) * bias_reversal).mean()
 
-        ctx.save_for_backward(edge_weights, desired_weights)
+        ctx.save_for_backward(edge_weights, desired_weights, bias_reversal)
         
         return loss
 
@@ -426,8 +437,8 @@ class MWPMLoss_v4(torch.autograd.Function):
         ctx,
         grad_output,
     ):
-        edge_weights, desired_edge_weights = ctx.saved_tensors
-        grad = (edge_weights - desired_edge_weights)
+        edge_weights, desired_edge_weights, bias_reversal = ctx.saved_tensors
+        grad = (edge_weights - desired_edge_weights) * bias_reversal
         
         return None, grad, None, None, None
 
