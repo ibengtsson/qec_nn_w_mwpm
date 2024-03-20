@@ -16,7 +16,8 @@ training_settings:
   comment: ""
   suffix: "0"
   seed: Null
-  dataset_size: 100000 # both, should change
+  dataset_size: 10000 
+  batch_size_train: 1000
   validation_set_size: 10000
   batch_size: 20000  # validation set
   warmup_epochs: 3
