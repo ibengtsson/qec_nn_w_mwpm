@@ -43,6 +43,8 @@ class LSTrainer_v2:
         training_history["comb_accuracy"] = []
         training_history["best_val_accuracy"] = -1
         training_history["iter_improvement"] = []
+        training_history["partial_time"] = []
+        training_history["tot_time"] = 0
         self.training_history = training_history
 
         # move model to correct device
@@ -287,6 +289,7 @@ class LSTrainer_v2:
         return val_accuracy, bal_accuracy
     
     def train(self):
+        tot_start_t = datetime.now()
         search_radius = self.training_settings["search_radius"]
         n_selections = self.training_settings["n_selections"]
         experiment = self.graph_settings["experiment"]
@@ -309,7 +312,7 @@ class LSTrainer_v2:
             n_repetitions = 1
         syndromes, flips, n_trivial = self.create_split_train_set()
         #n_graphs = syndromes.shape[0]
-        start_t = datetime.now()
+    
         graph_set = self.create_graph_set(syndromes, flips, n_trivial)
         # n_correct = 0
         # n_graphs = 0
@@ -329,6 +332,7 @@ class LSTrainer_v2:
         # self.training_history["train_accuracy"].append(ls.top_score)
         # self.training_history["iter_improvement"].append(0)
         print("Number of dimension partitions:",n_dim_iter)
+        partial_start_t = datetime.now()
         for i in range(n_dim_iter*n_repetitions):
                 old_acc = ls.top_score
                 ls.step_split_data(graph_set)
@@ -356,14 +360,29 @@ class LSTrainer_v2:
                         n_correct_val += _n_correct
                     val_accuracy = n_correct_val/n_val_graphs
                     self.training_history["val_accuracy"].append(val_accuracy)
+                    partial_t = datetime.now() - partial_start_t
+                    self.training_history["partial_time"].append(partial_t)
                     if self.save_model:
                         self.save_model_w_training_settings()
 
         # update model to best version after local search
         # nn.utils.vector_to_parameters(ls.elite, self.model.parameters())
                
-        epoch_t = datetime.now() - start_t
-        print(f"The training took: {epoch_t}")
+        tot_t = datetime.now() - tot_start_t
+        self.training_history["tot_time"]=tot_t
+        if self.save_model:
+            self.save_model_w_training_settings()
+        print(f"The training took: {tot_t}")
+
+    def get_training_metrics(self):
+
+        train_accuracy = self.training_history["train_accuracy"]
+        val_accuracy = self.training_history["val_accuracy"]
+        #acc = self.training_history["comb_accuracy"]
+        time = self.training_history["partial_time"]
+
+        return train_accuracy, val_accuracy, time
+
                
 
 class LSTrainer:
