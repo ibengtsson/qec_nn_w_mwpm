@@ -75,7 +75,7 @@ class LSTrainer_v2:
         attributes = {
             "training_history": self.training_history,
             "model": self.optimal_weights,
-            "model_vec": nn.utils.parameters_to_vector(self.model),
+            "model_vec": torch.nn.utils.parameters_to_vector(self.model.parameters()),
             "graph_settings": self.graph_settings,
             "training_settings": self.training_settings,
         }
