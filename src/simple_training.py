@@ -11,7 +11,7 @@ import pandas as pd
 from src.utils import parse_yaml, inference_TEST, predict_mwpm
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import SimpleGraphNN
+from src.models import SimpleGraphNNV2
 from src.losses import MWPMLoss_v4
 
 
@@ -71,7 +71,7 @@ class SimpleTrainer:
         ):
             torch.cuda.set_device(self.device)
 
-        self.model = SimpleGraphNN(
+        self.model = SimpleGraphNNV2(
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],
             hidden_channels_MLP=model_settings["hidden_channels_MLP"],
         ).to(self.device)
@@ -358,9 +358,6 @@ class SimpleTrainer:
 
             if self.save_model:
                 self.save_model_w_training_settings()
-            
-            print(f"Loss: {train_loss:.6f}")
-            print(f"Accuracy: {val_accuracy:.2f}")
 
     def get_training_metrics(self):
 
@@ -419,15 +416,15 @@ class SimpleTrainer:
         logical_accuracy = (n_correct + n_identities) / n_graphs
 
         # confusion plot
-        true_identity = ((preds == 0) & (flips == 0)).sum()
-        true_flip = ((preds == 1) & (flips == 1)).sum()
-        false_identity = ((preds == 0) & (flips == 1)).sum()
-        false_flip = ((preds == 1) & (flips == 0)).sum()
+        true_identity = ((preds == 0) & (flips == 0)).sum() / (flips == 0).sum() * 100
+        true_flip = ((preds == 1) & (flips == 1)).sum() / (flips == 1).sum() * 100
+        false_identity = ((preds == 0) & (flips == 1)).sum() / (flips == 1).sum() * 100
+        false_flip = ((preds == 1) & (flips == 0)).sum() / (flips == 0).sum() * 100
 
         confusion_data = [[true_identity, false_identity], [false_flip, true_flip]]
         df_confusion = pd.DataFrame(
             confusion_data,
-            index=["Predicted 0", "Predicted 1"],
+            index=["Predicted 0 (%)", "Predicted 1 (%)"],
             columns=["True 0", "True 1"],
         )
         
