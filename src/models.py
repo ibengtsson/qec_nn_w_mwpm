@@ -339,7 +339,7 @@ class SimpleGraphNN(nn.Module):
         self.split_syndromes = SplitSyndromes()
         
         # Activation function
-        self.activation = torch.nn.ReLU()
+        self.activation = torch.nn.Tanh()
 
     def forward(
         self,
@@ -445,6 +445,7 @@ class SimpleGraphNNV2(nn.Module):
         c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
         
         emb = self.embed(torch.cat([w, c], dim=-1))
+        emb = self.activation(emb)
         
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
         edge_feat = torch.cat([x_src, emb, x_dst], dim=-1) 
