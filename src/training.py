@@ -57,7 +57,7 @@ class LSTrainer_v2:
             + "_"
         )
         current_datetime = datetime.now().strftime("%y%m%d-%H%M%S")
-        suffix = training_settings["comment"]
+        suffix = training_settings["suffix"]
         self.save_name = name + current_datetime + "_" + suffix
         # check if model should be loaded
         if training_settings["resume_training"]:

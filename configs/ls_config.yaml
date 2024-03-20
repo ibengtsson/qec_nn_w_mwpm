@@ -15,7 +15,8 @@ graph_settings:
   power: 2
   n_classes: 1
 training_settings:
-  comment: "0"
+  suffix: "a"
+  comment: ""
   seed: Null
   dataset_size: 10000 # both, should change
   batch_size_train: 1000

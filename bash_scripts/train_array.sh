@@ -2,7 +2,7 @@
 #SBATCH -A NAISS2023-5-353 -p alvis
 #SBATCH -t 3-00:00:00 			# time limit days-hours:minutes:seconds
 #SBATCH -J mwpm_ls_training
-#SBATCH -o ../../alvis_out/mwpm_ls_training_%j.out
+#SBATCH -o ../../alvis_out/mwpm_ls_training_%A_%a.out
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus-per-node=A40:1
 
