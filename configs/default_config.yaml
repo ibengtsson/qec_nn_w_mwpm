@@ -3,10 +3,10 @@ paths:
   saved_model_path:  
 model_settings:
   hidden_channels_GCN:
-    - 32
-    - 64 
+    - 128
+    - 256
   hidden_channels_MLP:
-    - 64
+    - 256
 graph_settings:
   experiment: "z"
   code_size: 5
@@ -21,10 +21,10 @@ training_settings:
   seed: Null
   dataset_size: 1000000
   validation_set_size: 30000
-  batch_size: 250000
+  batch_size: 80000
   tot_epochs: 1000
   lr: 0.0001
   device: cuda
   resume_training: False
   current_epoch: 0
-  comment: "Test of additional embedding and ReLU."
+  comment: "Test of additional embedding and ReLU. Slightly bigger."
