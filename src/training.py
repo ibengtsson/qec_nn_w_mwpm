@@ -359,9 +359,6 @@ class ModelTrainer:
 
             if self.save_model:
                 self.save_model_w_training_settings()
-            
-            print(f"Loss: {train_loss:.6f}")
-            print(f"Accuracy: {val_accuracy:.2f}")
 
     def get_training_metrics(self):
 
