@@ -20,6 +20,7 @@
     * Setting losses like below seems to help
     * Works for `torch.manual_seed(2/11/?)`
     * `torch.manual_seed(4)` collapses...
+    * Changing from Adam to SGD seems to help! Gives slower training but it appears to converge
   ```
   _desired_weights = torch.zeros(weights.shape)
             if prediction == label:

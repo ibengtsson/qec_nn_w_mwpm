@@ -7,8 +7,6 @@ from src.utils import mwpm_prediction, mwpm_w_grad, mwpm_w_grad_v2
 
 from torch.multiprocessing import Pool
 from torch.multiprocessing import cpu_count
-import logging
-logging.disable(sys.maxsize)
 
 class MWPMLoss(torch.autograd.Function):
     
@@ -283,11 +281,13 @@ class NestedMWPMLoss(torch.autograd.Function):
         
         # we must loop through every graph since each one will have given a new set of edge weights
         loss = 0
+        n_edges = 0
         preds = []
         grads = []
         for edges, weights, classes, label in zip(edge_index, edge_weights, edge_classes, labels):
 
             # find which (of the two) egdes that have the minimum weight for each node pair
+            n_edges += edges.shape[1]
             weights = torch.cat([weights[::2], weights[1::2]], dim=1)
             classes = torch.cat([classes[::2], classes[1::2]], dim=1)
             edges = edges[:, ::2]
@@ -299,7 +299,7 @@ class NestedMWPMLoss(torch.autograd.Function):
             classes = classes[range(edges.shape[1]), min_inds]
             
             # do a softmax on the weights
-            weights = torch.nn.functional.softmax(weights, dim=0)
+            weights = torch.nn.functional.sigmoid(weights)
 
             # move to CPU and run MWPM
             edges = edges.cpu().numpy()
@@ -311,12 +311,10 @@ class NestedMWPMLoss(torch.autograd.Function):
             # compute gradients
             optimal_edge_weights = torch.zeros_like(weights)
             if prediction == label:
-                norm = max((~match_mask).sum(), 1)
-                optimal_edge_weights[~match_mask] = 1 / norm
+                optimal_edge_weights[~match_mask] = 1
                 optimal_edge_weights[match_mask] = 0
             else:
-                norm = max((match_mask).sum(), 1)
-                optimal_edge_weights[match_mask] = 1 / norm
+                optimal_edge_weights[match_mask] = 1
                 optimal_edge_weights[~match_mask] = 0
                 
             diff = weights - optimal_edge_weights
@@ -324,7 +322,9 @@ class NestedMWPMLoss(torch.autograd.Function):
             grads.append(grad.T.flatten()[:, None])
             
             # compute loss and save prediction
-            loss += (diff ** 2).sum()
+            first_log = torch.clamp(torch.log(weights), min=-100, max=None)
+            second_log = torch.clamp(torch.log(1 - weights), min=-100, max=None)
+            loss += (-(optimal_edge_weights * first_log + (1 - optimal_edge_weights) * second_log)).sum()
             preds.append(prediction)
             
         grads = torch.nested.nested_tensor(grads)
@@ -333,9 +333,8 @@ class NestedMWPMLoss(torch.autograd.Function):
         # compute accuracy and scale loss
         n_correct = (preds == labels).sum()
         accuracy = n_correct / labels.shape[0]
-        
-        loss *= (1 - accuracy)
-        loss /= labels.shape[0]
+
+        loss = loss / n_edges
         ctx.save_for_backward(grads)
         ctx.accuracy = accuracy
         ctx.n_graphs = labels.shape[0]
@@ -386,8 +385,8 @@ class MWPMLoss_v4(torch.autograd.Function):
         # we must loop through every graph since each one will have given a new set of edge weights
         desired_weights = torch.zeros_like(edge_weights, device="cpu")
         
-        # TEST
-        bias_reversal = torch.zeros_like(edge_weights, device="cpu")
+        # # TEST
+        # bias_reversal = torch.zeros_like(edge_weights, device="cpu")
         
         preds = []
         for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
@@ -399,7 +398,7 @@ class MWPMLoss_v4(torch.autograd.Function):
 
             prediction, match_mask = mwpm_w_grad_v2(edges, weights, classes)
             _desired_weights = torch.zeros(weights.shape)
-            _bias_reversal = torch.zeros(weights.shape)
+            # _bias_reversal = torch.zeros(weights.shape)
             
             if prediction == label:
                 _desired_weights[~match_mask] = 1
@@ -408,16 +407,16 @@ class MWPMLoss_v4(torch.autograd.Function):
                 _desired_weights[match_mask] = 1
                 _desired_weights[~match_mask] = 0
             
-            _bias_reversal[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
-            _bias_reversal[match_mask] = edges.shape[1] / np.maximum((match_mask).sum(), 1)
+            # _bias_reversal[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
+            # _bias_reversal[match_mask] = edges.shape[1] / np.maximum((match_mask).sum(), 1)
             desired_weights[edge_map] = _desired_weights
-            bias_reversal[edge_map] = _bias_reversal
+            # bias_reversal[edge_map] = _bias_reversal
             preds.append(prediction)
             
            
 
         desired_weights = desired_weights.to(edge_weights.device)
-        bias_reversal = bias_reversal.to(edge_weights.device)
+        # bias_reversal = bias_reversal.to(edge_weights.device)
         
         preds = np.array(preds)
         n_correct = (preds == labels).sum()
@@ -426,9 +425,9 @@ class MWPMLoss_v4(torch.autograd.Function):
         
         first_log = torch.clamp(torch.log(edge_weights), min=-100, max=None)
         second_log = torch.clamp(torch.log(1 - edge_weights), min=-100, max=None)
-        loss = (-(desired_weights * first_log + (1 - desired_weights) * second_log) * bias_reversal).mean()
+        loss = (-(desired_weights * first_log + (1 - desired_weights) * second_log)).mean()
 
-        ctx.save_for_backward(edge_weights, desired_weights, bias_reversal)
+        ctx.save_for_backward(edge_weights, desired_weights)
         
         return loss
 
@@ -437,8 +436,8 @@ class MWPMLoss_v4(torch.autograd.Function):
         ctx,
         grad_output,
     ):
-        edge_weights, desired_edge_weights, bias_reversal = ctx.saved_tensors
-        grad = (edge_weights - desired_edge_weights) * bias_reversal
+        edge_weights, desired_edge_weights = ctx.saved_tensors
+        grad = (edge_weights - desired_edge_weights)
         
         return None, grad, None, None, None
 

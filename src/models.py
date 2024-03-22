@@ -232,19 +232,12 @@ class GraphNNV2(nn.Module):
         )
         
         # Dense layers
-        transition_dim = hidden_channels_GCN[-1] * 2 + 1 + 2
+        transition_dim = hidden_channels_GCN[-1] * 3 + 3
         channels = [transition_dim] + hidden_channels_MLP
         self.dense_layers = nn.ModuleList(
             [
                 nn.Linear(in_channels, out_channels)
                 for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
-            ]
-        )
-        
-        # Normalisation
-        self.norms = nn.ModuleList(
-            [
-                nn.LayerNorm(in_channels) for in_channels in channels[1:]
             ]
         )
 
@@ -255,8 +248,7 @@ class GraphNNV2(nn.Module):
         self.split_syndromes = SplitSyndromes()
         
         # Activation functions
-        self.graph_activation = torch.nn.Tanh()
-        self.dense_activation = torch.nn.SiLU()
+        self.activation = torch.nn.ReLU()
 
     def forward(
         self,
@@ -270,7 +262,7 @@ class GraphNNV2(nn.Module):
         w = edge_attr[:, [0]]
         for layer in self.graph_layers:
             x = layer(x, edges, w)
-            x = self.graph_activation(x)
+            x = self.activation(x)
         
         # split syndromes so only X (Z) nodes remain and create an edge embedding
         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
@@ -278,27 +270,28 @@ class GraphNNV2(nn.Module):
         w = edge_attr[:, [0]]
         c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
         
-        x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
-        _batch_labels = batch_labels[edges[0, :]]
+        x_pool = nng.global_mean_pool(x, batch_labels)
+        inds = batch_labels[edges[0, :]]
+        x_emb = torch.cat([x_pool[inds], w, c], dim=-1)
         
-        edge_feat = torch.cat([x_src, w, c, x_dst], dim=-1) 
-        edge_feat_p_batch = list(unbatch(edge_feat, _batch_labels))
+        x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
+        edge_feat = torch.cat([x_src, x_dst, x_emb], dim=-1) 
+        edge_feat_p_batch = list(unbatch(edge_feat, inds))
         edge_feat = torch.nested.as_nested_tensor(edge_feat_p_batch)
         
         # send the edge features through linear layers
-        for layer, norm in zip(self.dense_layers, self.norms):
+        for layer in self.dense_layers:
             edge_feat = layer(edge_feat)
-            edge_feat = self.dense_activation(edge_feat)
-            edge_feat = norm(edge_feat)
+            edge_feat = self.activation(edge_feat)
         
         # output
         edge_feat = self.output_layer(edge_feat)
         
         # seperate data
-        edges_p_batch = list(unbatch(edges, _batch_labels, dim=1))
+        edges_p_batch = list(unbatch(edges, inds, dim=1))
         edges = torch.nested.as_nested_tensor(edges_p_batch)
         
-        edge_classes_p_batch = list(unbatch(edge_attr[:, [1]], _batch_labels))
+        edge_classes_p_batch = list(unbatch(edge_attr[:, [1]], inds))
         edge_classes = torch.nested.as_nested_tensor(edge_classes_p_batch)
         
         return edges.unbind(), edge_feat.unbind(), edge_classes.unbind()
@@ -487,12 +480,9 @@ class SimpleGraphNNV3(nn.Module):
                 for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
             ]
         )
-        
-        # Embedding
-        self.emb = nn.Linear(hidden_channels_GCN[-1] + 2 + 1, hidden_channels_GCN[-1])
     
         # Dense layers
-        transition_dim = hidden_channels_GCN[-1] * 3
+        transition_dim = hidden_channels_GCN[-1] * 3 + 3
         channels = [transition_dim] + hidden_channels_MLP
         self.dense_layers = nn.ModuleList(
             [
@@ -535,12 +525,8 @@ class SimpleGraphNNV3(nn.Module):
         inds = batch_labels[edges[0, :]]
         x_emb = torch.cat([x_pool[inds], w, c], dim=-1)
         
-        # embedding
-        x_emb = self.emb(x_emb)
-        x_emb = self.activation(x_emb)
-        
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
-        edge_feat = torch.cat([x_src, x_emb, x_dst], dim=-1) 
+        edge_feat = torch.cat([x_src, x_dst, x_emb], dim=-1) 
         
         # send the edge features through linear layers
         for layer in self.dense_layers:

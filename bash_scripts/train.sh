@@ -20,5 +20,5 @@ else
     config=$1
 fi
 
-apptainer exec ~/containers/torch/PyG.sif python ../scripts/train.py -c $config --save
+apptainer exec ~/containers/torch/PyG_new.sif python ../scripts/train.py -c $config --save
 # python3 ../scripts/train.py -c $config --save

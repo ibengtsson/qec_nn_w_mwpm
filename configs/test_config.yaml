@@ -5,11 +5,7 @@ model_settings:
   hidden_channels_GCN: 
     - 32
     - 64 
-    - 128
-    - 256
   hidden_channels_MLP: 
-    - 256
-    - 128
     - 64
 graph_settings:
   experiment: "z"
@@ -23,13 +19,13 @@ graph_settings:
   n_classes: 1
 training_settings:
   seed: Null
-  dataset_size: 20000
+  dataset_size: 10000
   validation_set_size: 10000
   batch_size: 2000
-  tot_epochs: 30
+  tot_epochs: 5
   lr: 0.0001
   device: cuda:1
   resume_training: False
   current_epoch: 0
-  comment: "Nested, no accuracy scaling in loss"
+  comment: "Test"
 

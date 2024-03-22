@@ -7,6 +7,10 @@ from qecsim.graphtools import mwpm
 from src.graph import get_batch_of_graphs, extract_edges
 import torch.multiprocessing as mp
 from torch.multiprocessing import Pool, cpu_count
+import pandas as pd
+import sys
+import logging
+logging.disable(sys.maxsize)
 
 def time_it(func, reps, *args):
     start_t = datetime.datetime.now()
@@ -122,6 +126,20 @@ def inference_TEST(
 
     n_correct = (preds == flips).sum()
     
+    # # confusion plot
+    # true_identity = ((preds == 0) & (flips == 0)).sum() / (flips == 0).sum() * 100
+    # true_flip = ((preds == 1) & (flips == 1)).sum() / (flips == 1).sum() * 100
+    # false_identity = ((preds == 0) & (flips == 1)).sum() / (flips == 1).sum() * 100
+    # false_flip = ((preds == 1) & (flips == 0)).sum() / (flips == 0).sum() * 100
+
+    # confusion_data = [[true_identity, false_identity], [false_flip, true_flip]]
+    # df_confusion = pd.DataFrame(
+    #     confusion_data,
+    #     index=["Predicted 0 (%)", "Predicted 1 (%)"],
+    #     columns=["True 0", "True 1"],
+    # )
+    # pd.set_option("display.precision", 2)
+    # print(df_confusion)
     return n_correct
 
 
@@ -213,12 +231,12 @@ def mwpm_prediction(edges, weights, classes):
     if edges.shape[1] == 1:
         flip = classes.sum() & 1
         return flip
-
+    
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
     
     matched_edges = mwpm(edges_w_weights)
-
+    
     # need to make sure matched_edges is sorted
     matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
     classes = np.array([edges_w_classes[edge] for edge in matched_edges])
@@ -260,7 +278,6 @@ def mwpm_w_grad_v2(edges, weights, classes):
 
     # classes = (classes > 0.5).astype(np.int32)
     classes = classes.astype(np.int32)
-    _classes = classes
     
     # if only one edge, we only have one matching
     if edges.shape[1] == 1:
@@ -283,13 +300,7 @@ def mwpm_w_grad_v2(edges, weights, classes):
     match_inds = [edge_range[edge] for edge in matched_edges]
     mask = np.zeros(weights.shape, dtype=bool)
     mask[match_inds] = True
-
-    # if flip:
-    #     print(_classes)
-    #     print(classes)
-    #     print(edges_w_weights)
-        
-        
+           
     return flip, mask
 
     

@@ -11,22 +11,20 @@ from torch_geometric.utils import coalesce, is_undirected, sort_edge_index
 import sys
 sys.path.append("../")
 from src.simulations import SurfaceCodeSim
-from src.graph import get_batch_of_graphs, extract_edges, extract_edges_v2
+from src.graph import get_batch_of_graphs, extract_edges
 from src.utils import time_it
+from src.models import GraphNN, GraphNNV2
+from qecsim.graphtools import mwpm
+import logging
+logging.disable(sys.maxsize)
+
 
 def main():
 
-    reps = 5
-    code_sz = 5
-    p = 1e-3
-    n_shots = 5000
+    edges = {(0, 1): 0.1, (0, 2): 0, (0, 3): 0, (1, 2): 0, (2, 3): 0, (5, 7): 2, (7, 8): 1, (5, 8): 1, (7, 8): 2, (6, 7): 2}
+    match_edges = mwpm(edges)
 
-    sim = SurfaceCodeSim(reps, code_sz, p, n_shots)
-    syndromes, flips, _ = sim.generate_syndromes(use_for_mwpm=True)
-    # x, edges, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(syndromes, 20)
-    
-    time_it(get_batch_of_graphs, 10, syndromes, 20)
-
+    print(match_edges)
     return 
 
 if __name__ == "__main__":

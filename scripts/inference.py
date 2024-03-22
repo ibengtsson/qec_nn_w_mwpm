@@ -3,9 +3,9 @@ import torch
 import sys
 
 sys.path.append("../")
-from src.models import GraphNN
+from src.models import GraphNN, SimpleGraphNN
 from src.simulations import SurfaceCodeSim
-from src.utils import inference
+from src.utils import inference, inference_TEST
 
 from pathlib import Path
 
@@ -31,16 +31,23 @@ def main():
     else:
         raise FileNotFoundError("The file was not found!")
 
-    model = GraphNN(
-        hidden_channels_GCN=[32, 128, 256, 512], hidden_channels_MLP=[512, 256, 128, 64]
-    ).to(device)
+    gcn_layers = model_data["model_settings"]["hidden_channels_GCN"]
+    mlp_layers = model_data["model_settings"]["hidden_channels_MLP"]
+    
+    # model = GraphNN(
+    #     hidden_channels_GCN=gcn_layers, hidden_channels_MLP=mlp_layers
+    # ).to(device)
+    model = SimpleGraphNN(
+        hidden_channels_GCN=gcn_layers,
+        hidden_channels_MLP=mlp_layers,
+        ).to(device)
     model.load_state_dict(model_data["model"])
     model.eval()
 
     print(f"Moved model to {device} and loaded pre-trained weights.")
 
     # settings
-    n_graphs = int(4e4)
+    n_graphs = int(1e5)
     n_graphs_per_sim = int(5e3)
     p = 1e-3
 
@@ -77,7 +84,7 @@ def main():
         n_trivial += n_identities
 
         # run inference
-        _correct_preds = inference(
+        _correct_preds = inference_TEST(
             model, syndromes, flips, m_nearest_nodes=m_nearest_nodes, device=device
         )
         correct_preds += _correct_preds
@@ -91,12 +98,12 @@ def main():
             n_shots=remaining,
         )
 
-        syndromes, flips, n_identities = sim.generate_syndromes()
+        syndromes, flips, n_identities = sim.generate_syndromes(use_for_mwpm=True)
         
         # add identities to # trivial predictions
         n_trivial += n_identities
 
-        _correct_preds = inference(
+        _correct_preds = inference_TEST(
             model, syndromes, flips, m_nearest_nodes=m_nearest_nodes, device=device
         )
         correct_preds += _correct_preds
