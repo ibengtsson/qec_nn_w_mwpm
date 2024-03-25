@@ -83,57 +83,7 @@ class LocalSearch:
             elite_vals = self.elite[self.value]
             self.vector[self.value] = elite_vals
 
-    def step(self,x, edge_index, edge_attr, batch_labels, detector_labels,flips):
-        #print(self.vector)
-        self.set_value()
-        self.set_noise()
-        #self.set_noise_vector()
-
-        self.vector[self.value] = self.vector[self.value] + self.magnitude
-        self.update_weights(self.model)
-        _, bal_acc, accuracy, _ = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
-        if self.metric is None or self.metric == "accuracy":
-            used_score = accuracy
-            alt_score = bal_acc
-        elif self.metric == "balanced":
-            used_score = bal_acc
-            alt_score = accuracy
-        else:
-            print(f"Metric {self.metric} is not defined")
-        if used_score > self.top_score:
-            self.set_elite()
-            self.top_score = used_score
-            self.alt_score = alt_score
-        else:
-            self.set_vector()
-        self.idx += 1
-        # decay to escape local maxima
-        if self.score_decay is not None:
-            self.top_score -= self.score_decay
-
-    # def step_test(self, x, t, loss_fcn):
-    #     self.set_value()
-    #     self.set_noise()
-    #     self.vector[self.value] = self.vector[self.value] + self.magnitude
-    #     self.update_weights(self.model)
-    #     new_pred = self.model(x)
-    #     loss = loss_fcn(new_pred, t)
-    #     if loss < self.top_score:
-    #         self.set_elite()
-    #         self.top_score = loss
-    #     else:
-    #         self.set_vector()
-    #     self.idx += 1
-    #     if loss < 1000:
-    #         self.search_radius = 0.01
-
-    def step_split_data(self, graphs):
-        #print(self.vector)
-        self.set_value()
-        self.set_noise()
-        #self.set_noise_vector()
-        self.vector[self.value] = self.vector[self.value] + self.magnitude
-        self.update_weights(self.model)
+    def run_inference(self, graphs):
         n_correct = 0
         n_graphs = 0
         TP = 0
@@ -160,6 +110,44 @@ class LocalSearch:
         sens = TP/(TP+FN)
         spec = TN/(TN+FP)
         bal_acc = (sens+spec)/2
+        return accuracy, bal_acc
+
+    def step(self,x, edge_index, edge_attr, batch_labels, detector_labels, flips):
+        #print(self.vector)
+        self.set_value()
+        self.set_noise()
+        #self.set_noise_vector()
+
+        self.vector[self.value] = self.vector[self.value] + self.magnitude
+        self.update_weights(self.model)
+        _, bal_acc, accuracy, _ = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels, flips)
+        if self.metric is None or self.metric == "accuracy":
+            used_score = accuracy
+            alt_score = bal_acc
+        elif self.metric == "balanced":
+            used_score = bal_acc
+            alt_score = accuracy
+        else:
+            print(f"Metric {self.metric} is not defined")
+        if used_score > self.top_score:
+            self.set_elite()
+            self.top_score = used_score
+            self.alt_score = alt_score
+        else:
+            self.set_vector()
+        self.idx += 1
+        # decay to escape local maxima
+        if self.score_decay is not None:
+            self.top_score -= self.score_decay
+
+    def step_split_data(self, graphs):
+        #print(self.vector)
+        self.set_value()
+        self.set_noise()
+        #self.set_noise_vector()
+        self.vector[self.value] = self.vector[self.value] + self.magnitude
+        self.update_weights(self.model)
+        accuracy, bal_acc = self.run_inference(graphs)
         if self.metric is None or self.metric == "accuracy":
             used_score = accuracy
             alt_score = bal_acc
@@ -182,3 +170,6 @@ class LocalSearch:
 
     def return_topscore(self):
         return self.top_score
+    
+    def return_alternative_metric(self):
+        return self.alt_score

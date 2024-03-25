@@ -19,7 +19,7 @@ training_settings:
   dataset_size: 10000
   batch_size_train: 1000
   validation_set_size: 1000
-  batch_size: 100  # validation set
+  batch_size_val: 100
   n_selections: 1000
   repeat_selection: False
   n_repetitions: 3
@@ -27,5 +27,5 @@ training_settings:
   device: cuda
   resume_training: False
   score_decay: 0.0002
-  metric: "accuracy"
+  metric: "balanced"
 

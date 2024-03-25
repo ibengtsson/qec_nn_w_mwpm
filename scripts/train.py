@@ -36,10 +36,10 @@ def main():
     #trainer.train_warmup()
     trainer.train()
     
-    acc, logical_accuracy, time = trainer.get_training_metrics()
+    train_score, val_score, time = trainer.get_training_metrics()
     
-    print(acc)
-    print(logical_accuracy)
+    print(train_score)
+    print(val_score)
     print(time)
     
 

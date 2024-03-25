@@ -19,7 +19,7 @@ training_settings:
   dataset_size: 10000 
   batch_size_train: 1000
   validation_set_size: 10000
-  batch_size: 20000  # validation set
+  batch_size_val: 20000  # validation set
   n_selections: 100
   repeat_selection: True
   n_repetitions: 12

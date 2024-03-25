@@ -38,10 +38,11 @@ class LSTrainer_v2:
         print(f"Running model on {self.device} with dataset size {self.training_settings['dataset_size']}.")
         # create a dictionary saving training metrics
         training_history = {}
-        training_history["train_accuracy"] = []
-        training_history["val_accuracy"] = []
-        training_history["comb_accuracy"] = []
-        training_history["best_val_accuracy"] = -1
+        training_history["train_score"] = []
+        training_history["alt_train_score"] = []
+        training_history["val_score"] = []
+        training_history["alt_val_score"] = []
+        training_history["best_val_score"] = -1
         training_history["iter_improvement"] = []
         training_history["partial_time"] = []
         training_history["tot_time"] = 0
@@ -90,8 +91,8 @@ class LSTrainer_v2:
         self.training_history = saved_attributes["training_history"]
 
         # older models do not have the attribute "best_val_accuracy"
-        if not "best_val_accuracy" in self.training_history:
-            self.training_history["best_val_accuracy"] = -1
+        if not "best_val_score" in self.training_history:
+            self.training_history["best_val_score"] = -1
         self.model.load_state_dict(saved_attributes["model"])
         self.save_name = self.save_name + "_load_f_" + model_path.name.split(sep=".")[0]
 
@@ -190,7 +191,7 @@ class LSTrainer_v2:
         flips = np.concatenate(flips)
 
         # split into chunks to reduce memory footprint later
-        batch_size = self.training_settings["batch_size"]   # maybe change?
+        batch_size = self.training_settings["batch_size_val"]
         n_splits = syndromes.shape[0] // batch_size + 1
 
         syndromes = np.array_split(syndromes, n_splits)
@@ -275,11 +276,40 @@ class LSTrainer_v2:
         bal_accuracy = bal_acc/len(syndromes)
         return val_accuracy, bal_accuracy
     
+    def evaluate_test_set_v2(self, val_graphs):
+        n_correct_val = 0
+        n_val_graphs = 0
+        TP = 0
+        TN = 0
+        FP = 0
+        FN = 0
+        for graph in val_graphs:
+            x = graph["x"]
+            edge_index = graph["edge_index"]
+            edge_attr = graph["edge_attr"]
+            batch_labels= graph["batch_labels"]
+            detector_labels = graph["detector_labels"]
+            flips = graph["flips"]
+            _n_graphs = len(flips)
+            n_val_graphs += _n_graphs
+            _n_correct, _, _, tp_tn_fp_fn = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+            n_correct_val += _n_correct
+            TP += tp_tn_fp_fn[0]
+            TN += tp_tn_fp_fn[1]
+            FP += tp_tn_fp_fn[2]
+            FN += tp_tn_fp_fn[3]
+        accuracy = n_correct_val/n_val_graphs
+        sens = TP/(TP+FN)
+        spec = TN/(TN+FP)
+        bal_acc = (sens+spec)/2
+        return accuracy, bal_acc
+
+
+    
     def train(self):
         tot_start_t = datetime.now()
         search_radius = self.training_settings["search_radius"]
         n_selections = self.training_settings["n_selections"]
-        experiment = self.graph_settings["experiment"]
         score_decay = self.training_settings["score_decay"]
         metric = self.training_settings["metric"]
         n_model_params = len(torch.nn.utils.parameters_to_vector(self.model.parameters()))
@@ -293,69 +323,50 @@ class LSTrainer_v2:
         val_syndromes, val_flips, n_val_identities = self.create_test_set(
             n_graphs=n_val_graphs,
         )
+        # generate validation set graphs
         val_graphs = self.create_graph_set(val_syndromes, val_flips, n_val_identities)
+
+        # set how many times all dimensions should be sampled
         repeat_selection = self.training_settings["repeat_selection"]
         if repeat_selection:
             n_repetitions = self.training_settings["n_repetitions"]
         else:
             n_repetitions = 1
+
+        # create full dataset, split into smaller "batches"
         syndromes, flips, n_trivial = self.create_split_train_set()
-        #n_graphs = syndromes.shape[0]
-    
+        # create set of graphs from split syndrome set
         graph_set = self.create_graph_set(syndromes, flips, n_trivial)
-        # n_correct = 0
-        # n_graphs = 0
-        # for graph in graph_set:
-        #     x = graph["x"]
-        #     edge_index = graph["edge_index"]
-        #     edge_attr = graph["edge_attr"]
-        #     batch_labels= graph["batch_labels"]
-        #     detector_labels = graph["detector_labels"]
-        #     flips = graph["flips"]
-        #     _n_graphs = len(flips)
-        #     n_graphs += _n_graphs
-        #     _n_correct, top_accuracy, accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
-        #     n_correct += _n_correct
-    
-        # # ls.top_score = n_correct/n_graphs
-        # self.training_history["train_accuracy"].append(ls.top_score)
-        # self.training_history["iter_improvement"].append(0)
         print("Number of dimension partitions:",n_dim_iter)
         partial_start_t = datetime.now()
         for i in range(n_dim_iter*n_repetitions):
-                old_acc = ls.top_score
+                old_acc = ls.return_topscore()
                 ls.step_split_data(graph_set)
-                new_acc = ls.top_score
+                new_acc = ls.return_topscore()
                 # we add new accuracy and i after each improvement
                 if new_acc > old_acc:
                     print("New best found at iteration:",i)
                     print("New best accuracy:",new_acc)
-                    self.training_history["train_accuracy"].append(ls.top_score)
+                    alt_metric = ls.return_alternative_metric()
+                    self.training_history["train_score"].append(new_acc)
                     self.training_history["iter_improvement"].append(i)
-                    self.training_history["comb_accuracy"].append(ls.alt_score)
+                    self.training_history["alt_train_score"].append(alt_metric)
                     # validation
-                    n_correct_val = 0
-                    n_val_graphs = 0
-                    for graph in val_graphs:
-                        x = graph["x"]
-                        edge_index = graph["edge_index"]
-                        edge_attr = graph["edge_attr"]
-                        batch_labels= graph["batch_labels"]
-                        detector_labels = graph["detector_labels"]
-                        flips = graph["flips"]
-                        _n_graphs = len(flips)
-                        n_val_graphs += _n_graphs
-                        _n_correct, top_accuracy, accuracy, _ = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
-                        n_correct_val += _n_correct
-                    val_accuracy = n_correct_val/n_val_graphs
-                    self.training_history["val_accuracy"].append(val_accuracy)
+                    val_accuracy, val_bal_acc = self.evaluate_test_set_v2(val_graphs)
+                    if metric == None or metric == "accuracy":
+                        self.training_history["val_score"].append(val_accuracy)
+                        self.training_history["alt_val_score"].append(val_bal_acc)
+                        if val_accuracy > self.training_history["best_val_score"]:
+                            self.training_history["best_val_score"] = val_accuracy
+                    elif metric == "balanced":
+                        self.training_history["val_score"].append(val_bal_acc)
+                        self.training_history["alt_val_score"].append(val_accuracy)
+                        if val_bal_acc > self.training_history["best_val_score"]:
+                            self.training_history["best_val_score"] = val_bal_acc
                     partial_t = datetime.now() - partial_start_t
                     self.training_history["partial_time"].append(partial_t)
                     if self.save_model:
                         self.save_model_w_training_settings()
-
-        # update model to best version after local search
-        # nn.utils.vector_to_parameters(ls.elite, self.model.parameters())
                
         tot_t = datetime.now() - tot_start_t
         self.training_history["tot_time"]=tot_t
@@ -365,12 +376,14 @@ class LSTrainer_v2:
 
     def get_training_metrics(self):
 
-        train_accuracy = self.training_history["train_accuracy"]
-        val_accuracy = self.training_history["val_accuracy"]
+        train_score = self.training_history["train_score"]
+        #alt_train_score = self.training_history["alt_train_score"]
+        val_score = self.training_history["val_score"]
+        #alt_val_score = self.training_history["alt_val_score"]
         #acc = self.training_history["comb_accuracy"]
         time = self.training_history["partial_time"]
 
-        return train_accuracy, val_accuracy, time
+        return train_score, val_score, time
 
                
 
