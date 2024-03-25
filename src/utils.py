@@ -189,4 +189,4 @@ def ls_inference(
     bal_acc = (sens+spec)/2
     n_correct = (preds == flips).sum()
     accuracy = n_correct / len(preds)
-    return n_correct, bal_acc, accuracy
+    return n_correct, bal_acc, accuracy, [TP, TN, FP, FN]

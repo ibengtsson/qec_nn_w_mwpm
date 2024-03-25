@@ -4,7 +4,14 @@ import numpy as np
 from src.utils import inference, ls_inference
 
 class LocalSearch:
-    def __init__(self, model, search_radius, num_selections, device, score_decay):
+    def __init__(
+            self, 
+            model, 
+            search_radius, 
+            num_selections, 
+            device, 
+            score_decay=None,
+            metric = None):
         self.model = model
         self.device = device
         self.initial_score = torch.tensor(float(0))
@@ -24,8 +31,9 @@ class LocalSearch:
         self.noise_vector = torch.empty_like(self.vector)
         self.jumped = False
         self.search_radius = search_radius
-        self.accuracy = 0
+        self.alt_score = 0
         self.score_decay = score_decay
+        self.metric = metric
 
     def set_value(self):
         """Use the numpy choices function (which has no equivalent in Pytorch)
@@ -83,16 +91,25 @@ class LocalSearch:
 
         self.vector[self.value] = self.vector[self.value] + self.magnitude
         self.update_weights(self.model)
-        _, new_accuracy, accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
-        if new_accuracy > self.top_score:
+        _, bal_acc, accuracy, _ = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+        if self.metric is None or self.metric == "accuracy":
+            used_score = accuracy
+            alt_score = bal_acc
+        elif self.metric == "balanced":
+            used_score = bal_acc
+            alt_score = accuracy
+        else:
+            print(f"Metric {self.metric} is not defined")
+        if used_score > self.top_score:
             self.set_elite()
-            self.top_score = new_accuracy
-            self.accuracy = accuracy
+            self.top_score = used_score
+            self.alt_score = alt_score
         else:
             self.set_vector()
         self.idx += 1
         # decay to escape local maxima
-        self.top_score -= self.score_decay
+        if self.score_decay is not None:
+            self.top_score -= self.score_decay
 
     # def step_test(self, x, t, loss_fcn):
     #     self.set_value()
@@ -119,6 +136,10 @@ class LocalSearch:
         self.update_weights(self.model)
         n_correct = 0
         n_graphs = 0
+        TP = 0
+        TN = 0
+        FP = 0
+        FN = 0
         for graph in graphs:
             x = graph["x"]
             edge_index = graph["edge_index"]
@@ -127,20 +148,36 @@ class LocalSearch:
             detector_labels = graph["detector_labels"]
             flips = graph["flips"]
             _n_graphs = len(flips)
-            _n_correct, new_accuracy, _ = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+            _n_correct, _, _, tp_tn_fp_fn = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
             n_correct += _n_correct
             n_graphs += _n_graphs
+            TP += tp_tn_fp_fn[0]
+            TN += tp_tn_fp_fn[1]
+            FP += tp_tn_fp_fn[2]
+            FN += tp_tn_fp_fn[3]
 
-        new_accuracy = n_correct/n_graphs
-        if new_accuracy > self.top_score:
+        accuracy = n_correct/n_graphs
+        sens = TP/(TP+FN)
+        spec = TN/(TN+FP)
+        bal_acc = (sens+spec)/2
+        if self.metric is None or self.metric == "accuracy":
+            used_score = accuracy
+            alt_score = bal_acc
+        elif self.metric == "balanced":
+            used_score = bal_acc
+            alt_score = accuracy
+        else:
+            print(f"Metric {self.metric} not defined")
+        if used_score > self.top_score:
             self.set_elite()
-            self.top_score = new_accuracy
-            #self.accuracy = accuracy
+            self.top_score = used_score
+            self.alt_score = alt_score
         else:
             self.set_vector()
         self.idx += 1
         # decay to escape local maxima
-        self.top_score -= self.score_decay
+        if self.score_decay is not None:
+            self.top_score -= self.score_decay
 
 
     def return_topscore(self):

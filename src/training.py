@@ -281,11 +281,12 @@ class LSTrainer_v2:
         n_selections = self.training_settings["n_selections"]
         experiment = self.graph_settings["experiment"]
         score_decay = self.training_settings["score_decay"]
+        metric = self.training_settings["metric"]
         n_model_params = len(torch.nn.utils.parameters_to_vector(self.model.parameters()))
         n_dim_iter = n_model_params // n_selections
 
         # initialize local search model
-        ls = LocalSearch(self.model, search_radius, n_selections, self.device, score_decay)        
+        ls = LocalSearch(self.model, search_radius, n_selections, self.device, score_decay, metric)        
 
         # generate validation syndromes
         n_val_graphs = self.training_settings["validation_set_size"]
@@ -331,7 +332,7 @@ class LSTrainer_v2:
                     print("New best accuracy:",new_acc)
                     self.training_history["train_accuracy"].append(ls.top_score)
                     self.training_history["iter_improvement"].append(i)
-                    self.training_history["comb_accuracy"].append(ls.accuracy)
+                    self.training_history["comb_accuracy"].append(ls.alt_score)
                     # validation
                     n_correct_val = 0
                     n_val_graphs = 0
@@ -344,7 +345,7 @@ class LSTrainer_v2:
                         flips = graph["flips"]
                         _n_graphs = len(flips)
                         n_val_graphs += _n_graphs
-                        _n_correct, top_accuracy, accuracy = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
+                        _n_correct, top_accuracy, accuracy, _ = ls_inference(self.model,x, edge_index, edge_attr, batch_labels, detector_labels,flips)
                         n_correct_val += _n_correct
                     val_accuracy = n_correct_val/n_val_graphs
                     self.training_history["val_accuracy"].append(val_accuracy)
