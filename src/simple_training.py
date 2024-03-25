@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime
 import random
 import pandas as pd
+import copy
 
 from src.utils import parse_yaml, inference_TEST, predict_mwpm
 from src.simulations import SurfaceCodeSim
@@ -114,7 +115,7 @@ class SimpleTrainer:
             self.training_history["best_val_accuracy"] = self.training_history[
                 "val_accuracy"
             ][-1]
-            self.optimal_weights = self.model.state_dict()
+            self.optimal_weights = copy.deepcopy(self.model.state_dict())
 
         attributes = {
             "training_history": self.training_history,
@@ -134,9 +135,6 @@ class SimpleTrainer:
         # update attributes and load model with trained weights
         self.training_history = saved_attributes["training_history"]
 
-        # older models do not have the attribute "best_val_accuracy"
-        if not "best_val_accuracy" in self.training_history:
-            self.training_history["best_val_accuracy"] = -1
         self.epoch = saved_attributes["training_history"]["epoch"] + 1
         self.model.load_state_dict(saved_attributes["model"])
         self.optimizer.load_state_dict(saved_attributes["optimizer"])

@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime
 import random
 import pandas as pd
+import copy
 
 from src.utils import parse_yaml, inference, predict_mwpm, predict_mwpm_nested
 from src.simulations import SurfaceCodeSim
@@ -114,7 +115,7 @@ class ModelTrainer:
             self.training_history["best_val_accuracy"] = self.training_history[
                 "val_accuracy"
             ][-1]
-            self.optimal_weights = self.model.state_dict()
+            self.optimal_weights = copy.deepcopy(self.model.state_dict())
 
         attributes = {
             "training_history": self.training_history,
@@ -134,9 +135,6 @@ class ModelTrainer:
         # update attributes and load model with trained weights
         self.training_history = saved_attributes["training_history"]
 
-        # older models do not have the attribute "best_val_accuracy"
-        if not "best_val_accuracy" in self.training_history:
-            self.training_history["best_val_accuracy"] = -1
         self.epoch = saved_attributes["training_history"]["epoch"] + 1
         self.model.load_state_dict(saved_attributes["model"])
         self.optimizer.load_state_dict(saved_attributes["optimizer"])
@@ -291,14 +289,7 @@ class ModelTrainer:
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
-            
-            
-            # if epoch > 0:
-            #     for i, (name, p) in enumerate(self.model.named_parameters()):
-            #         print(f"Parameter tensor {name}:")
-            #         print(p.grad)
-            #         print(f"Mean of parameter tensor {i}:")
-            #         print(torch.mean(p.grad))
+
             for _ in range(n_batches):
                 
                 # simulate data as we go
@@ -356,6 +347,9 @@ class ModelTrainer:
             self.training_history["epoch"] = epoch
             self.training_history["train_loss"].append(train_loss)
             self.training_history["val_accuracy"].append(val_accuracy)
+            
+            print(f"Loss: {train_loss:.2f}")
+            print(f"Accuracy: {val_accuracy:.2f}")
 
             if self.save_model:
                 self.save_model_w_training_settings()
