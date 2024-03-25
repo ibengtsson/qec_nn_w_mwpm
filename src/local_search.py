@@ -4,7 +4,7 @@ import numpy as np
 from src.utils import inference, ls_inference
 
 class LocalSearch:
-    def __init__(self, model, search_radius, num_selections, device):
+    def __init__(self, model, search_radius, num_selections, device, score_decay):
         self.model = model
         self.device = device
         self.initial_score = torch.tensor(float(0))
@@ -25,6 +25,7 @@ class LocalSearch:
         self.jumped = False
         self.search_radius = search_radius
         self.accuracy = 0
+        self.score_decay = score_decay
 
     def set_value(self):
         """Use the numpy choices function (which has no equivalent in Pytorch)
@@ -90,9 +91,8 @@ class LocalSearch:
         else:
             self.set_vector()
         self.idx += 1
-        #self.update_weights(self.model)
-            # decay to escape local maxima
-            #self.top_score -= 0.002
+        # decay to escape local maxima
+        self.top_score -= self.score_decay
 
     # def step_test(self, x, t, loss_fcn):
     #     self.set_value()
@@ -139,9 +139,8 @@ class LocalSearch:
         else:
             self.set_vector()
         self.idx += 1
-        #self.update_weights(self.model)
-            # decay to escape local maxima
-            #self.top_score -= 0.002
+        # decay to escape local maxima
+        self.top_score -= self.score_decay
 
 
     def return_topscore(self):
