@@ -12,7 +12,7 @@ import copy
 from src.utils import parse_yaml, inference_TEST, predict_mwpm
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import SimpleGraphNNV2
+from src.models import SimpleGraphNN
 from src.losses import MWPMLoss_v4
 
 
@@ -72,7 +72,7 @@ class SimpleTrainer:
         ):
             torch.cuda.set_device(self.device)
 
-        self.model = SimpleGraphNNV2(
+        self.model = SimpleGraphNN(
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],
             hidden_channels_MLP=model_settings["hidden_channels_MLP"],
         ).to(self.device)

@@ -352,7 +352,7 @@ class SimpleGraphNN(nn.Module):
         self.split_syndromes = SplitSyndromes()
         
         # Activation function
-        self.activation = torch.nn.Tanh()
+        self.activation = torch.nn.ReLU()
 
     def forward(
         self,

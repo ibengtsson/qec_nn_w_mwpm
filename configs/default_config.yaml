@@ -1,10 +1,10 @@
 paths:
   save_dir: ../training_outputs/
-  saved_model_path:  
+  saved_model_path: ../training_outputs/d5_d_t_5_240320-141138.pt
 model_settings:
   hidden_channels_GCN:
-    - 128
     - 256
+    - 512
   hidden_channels_MLP:
     - 256
 graph_settings:
@@ -22,9 +22,9 @@ training_settings:
   dataset_size: 1000000
   validation_set_size: 30000
   batch_size: 80000
-  tot_epochs: 1000
+  tot_epochs: 1500
   lr: 0.0001
   device: cuda
-  resume_training: False
-  current_epoch: 0
-  comment: "Test of additional embedding and ReLU. Slightly bigger."
+  resume_training: True
+  current_epoch: 1000
+  comment: "Continuation, testing scaled loss again."

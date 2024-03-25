@@ -410,7 +410,7 @@ class MWPMLoss_v4(torch.autograd.Function):
             if prediction == label:
                 _desired_weights[~match_mask] = 1
                 _desired_weights[match_mask] = 0
-            
+
             else:
                 _desired_weights[match_mask] = 1
                 _desired_weights[~match_mask] = 0
@@ -531,8 +531,7 @@ class MWPMLoss_v4_parallel(torch.autograd.Function):
         grad, = ctx.saved_tensors
         
         return None, grad, None, None, None
-    
-    
+
 class AttentionMWPMLoss(torch.autograd.Function):
 
     # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
@@ -632,8 +631,7 @@ class AttentionMWPMLoss(torch.autograd.Function):
         _0,
     ):
         grads, = ctx.saved_tensors
-        if torch.isnan(grads).sum() > 0:
-            print("NaNs in gradient!")
+
         return None, grads, None, None
     
 class AttentionMWPMLossV2(torch.autograd.Function):
