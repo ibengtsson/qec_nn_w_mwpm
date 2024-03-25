@@ -404,20 +404,28 @@ class MWPMLoss_v4(torch.autograd.Function):
             if prediction == label:
                 _desired_weights[~match_mask] = 1
                 _desired_weights[match_mask] = 0
+                
+                # TEST
+                # scale = 0.1
+                scale = 1.0
             else:
                 _desired_weights[match_mask] = 1
                 _desired_weights[~match_mask] = 0
+                
+                # TEST
+                scale = 1.0
             
             _bias_reversal[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
             _bias_reversal[match_mask] = edges.shape[1] / np.maximum(match_mask.sum(), 1)
             desired_weights[edge_map] = _desired_weights
-            bias_reversal[edge_map] = _bias_reversal
+            
+            bias_reversal[edge_map] = _bias_reversal * scale
             preds.append(prediction)
             
            
 
         desired_weights = desired_weights.to(edge_weights.device)
-        # bias_reversal = bias_reversal.to(edge_weights.device)
+        bias_reversal = bias_reversal.to(edge_weights.device)
         
         preds = np.array(preds)
         n_correct = (preds == labels).sum()
