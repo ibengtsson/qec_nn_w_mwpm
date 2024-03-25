@@ -31,3 +31,4 @@ training_settings:
   device: cuda
   resume_training: False
   current_epoch: 0
+  score_decay: 0.0002

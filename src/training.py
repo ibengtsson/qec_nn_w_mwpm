@@ -280,11 +280,12 @@ class LSTrainer_v2:
         search_radius = self.training_settings["search_radius"]
         n_selections = self.training_settings["n_selections"]
         experiment = self.graph_settings["experiment"]
+        score_decay = self.training_settings["score_decay"]
         n_model_params = len(torch.nn.utils.parameters_to_vector(self.model.parameters()))
         n_dim_iter = n_model_params // n_selections
 
         # initialize local search model
-        ls = LocalSearch(self.model, search_radius, n_selections, self.device)        
+        ls = LocalSearch(self.model, search_radius, n_selections, self.device, score_decay)        
 
         # generate validation syndromes
         n_val_graphs = self.training_settings["validation_set_size"]
@@ -325,7 +326,7 @@ class LSTrainer_v2:
                 ls.step_split_data(graph_set)
                 new_acc = ls.top_score
                 # we add new accuracy and i after each improvement
-                if ~np.equal(new_acc, old_acc):
+                if new_acc > old_acc:
                     print("New best found at iteration:",i)
                     print("New best accuracy:",new_acc)
                     self.training_history["train_accuracy"].append(ls.top_score)

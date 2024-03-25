@@ -19,8 +19,8 @@ def main():
     args = parser.parse_args() 
     
     # create a model
-    #model = GraphNN()
-    model = SimpleGraphNN()
+    model = GraphNN()
+    #model = SimpleGraphNN()
     config = Path(args.configuration)
     
     # check if model should be saved
@@ -36,11 +36,11 @@ def main():
     #trainer.train_warmup()
     trainer.train()
     
-    acc, logical_accuracy, acc2 = trainer.get_training_metrics()
+    acc, logical_accuracy, time = trainer.get_training_metrics()
     
     print(acc)
     print(logical_accuracy)
-    print(acc2)
+    print(time)
     
 
 if __name__ == "__main__":

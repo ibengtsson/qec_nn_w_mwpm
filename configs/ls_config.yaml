@@ -20,12 +20,12 @@ training_settings:
   seed: Null
   dataset_size: 10000 # both, should change
   batch_size_train: 1000
-  validation_set_size: 10000
-  batch_size: 1000  # validation set
+  validation_set_size: 1000
+  batch_size: 100  # validation set
   warmup_epochs: 3
   tot_epochs: 10
-  n_selections: 100
-  repeat_selection: True
+  n_selections: 1000
+  repeat_selection: False
   n_repetitions: 3
   search_radius: 0.001
   warmup_lr: 0.001
@@ -33,4 +33,5 @@ training_settings:
   device: cuda
   resume_training: False
   current_epoch: 0
+  score_decay: 0.0002
 
