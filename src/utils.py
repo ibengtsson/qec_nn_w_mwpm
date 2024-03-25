@@ -126,20 +126,20 @@ def inference_TEST(
 
     n_correct = (preds == flips).sum()
     
-    # confusion plot
-    true_identity = ((preds == 0) & (flips == 0)).sum() / (flips == 0).sum() * 100
-    true_flip = ((preds == 1) & (flips == 1)).sum() / (flips == 1).sum() * 100
-    false_identity = ((preds == 0) & (flips == 1)).sum() / (flips == 1).sum() * 100
-    false_flip = ((preds == 1) & (flips == 0)).sum() / (flips == 0).sum() * 100
+    # # confusion plot
+    # true_identity = ((preds == 0) & (flips == 0)).sum() / (flips == 0).sum() * 100
+    # true_flip = ((preds == 1) & (flips == 1)).sum() / (flips == 1).sum() * 100
+    # false_identity = ((preds == 0) & (flips == 1)).sum() / (flips == 1).sum() * 100
+    # false_flip = ((preds == 1) & (flips == 0)).sum() / (flips == 0).sum() * 100
 
-    confusion_data = [[true_identity, false_identity], [false_flip, true_flip]]
-    df_confusion = pd.DataFrame(
-        confusion_data,
-        index=["Predicted 0 (%)", "Predicted 1 (%)"],
-        columns=["True 0", "True 1"],
-    )
-    pd.set_option("display.precision", 2)
-    print(df_confusion)
+    # confusion_data = [[true_identity, false_identity], [false_flip, true_flip]]
+    # df_confusion = pd.DataFrame(
+    #     confusion_data,
+    #     index=["Predicted 0 (%)", "Predicted 1 (%)"],
+    #     columns=["True 0", "True 1"],
+    # )
+    # pd.set_option("display.precision", 2)
+    # print(df_confusion)
     return n_correct
 
 
