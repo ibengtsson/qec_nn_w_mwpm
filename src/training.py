@@ -72,15 +72,23 @@ class LSTrainer_v2:
             path = self.save_dir / (self.save_name + ".pt")
 
         self.optimal_weights = self.model.state_dict()
-
-        attributes = {
-            "training_history": self.training_history,
-            "model": self.optimal_weights,
-            "model_vec": torch.nn.utils.parameters_to_vector(self.model.parameters()),
-            "graph_settings": self.graph_settings,
-            "training_settings": self.training_settings,
-        }
-
+        if self.training_settings["resume_training"]:
+            attributes = {
+                "training_history": self.training_history,
+                "model": self.optimal_weights,
+                "model_vec": torch.nn.utils.parameters_to_vector(self.model.parameters()),
+                "graph_settings": self.graph_settings,
+                "training_settings": self.training_settings,
+                "training_history_prev": self.training_history_prev
+            }
+        else:
+            attributes = {
+                "training_history": self.training_history,
+                "model": self.optimal_weights,
+                "model_vec": torch.nn.utils.parameters_to_vector(self.model.parameters()),
+                "graph_settings": self.graph_settings,
+                "training_settings": self.training_settings
+            }
         torch.save(attributes, path)
 
     def load_trained_model(self):
@@ -88,11 +96,11 @@ class LSTrainer_v2:
         saved_attributes = torch.load(model_path, map_location=self.device)
 
         # update attributes and load model with trained weights
-        self.training_history = saved_attributes["training_history"]
+        self.training_history_prev = saved_attributes["training_history"]
 
         # older models do not have the attribute "best_val_accuracy"
-        if not "best_val_score" in self.training_history:
-            self.training_history["best_val_score"] = -1
+        # if not "best_val_score" in self.training_history:
+        #     self.training_history["best_val_score"] = -1
         self.model.load_state_dict(saved_attributes["model"])
         self.save_name = self.save_name + "_load_f_" + model_path.name.split(sep=".")[0]
 
@@ -192,6 +200,51 @@ class LSTrainer_v2:
 
         # split into chunks to reduce memory footprint later
         batch_size = self.training_settings["batch_size_val"]
+        n_splits = syndromes.shape[0] // batch_size + 1
+
+        syndromes = np.array_split(syndromes, n_splits)
+        flips = np.array_split(flips, n_splits)
+
+        return syndromes, flips, n_identities
+    
+    # create a split set used for training with multiple different error prob
+    def create_multi_p_set(self, n=5):
+        
+        # simulation settings
+        code_size = self.graph_settings["code_size"]
+        reps = self.graph_settings["repetitions"]
+        min_error_rate = self.graph_settings["min_error_rate"]
+        max_error_rate = self.graph_settings["max_error_rate"]
+        dataset_size = self.training_settings["dataset_size"]
+        error_rates = np.linspace(min_error_rate, max_error_rate, n)
+
+        task_dict = {
+            "z": "surface_code:rotated_memory_z",
+            "x": "surface_code:rotated_memory_x",
+        }
+        code_task = task_dict[self.graph_settings["experiment"]]
+
+        syndromes = []
+        flips = []
+        n_identities = 0
+        for p in error_rates:
+            sim = SurfaceCodeSim(
+                reps,
+                code_size,
+                p,
+                int(dataset_size / n),
+                code_task=code_task,
+            )
+            syndrome, flip, n_id = sim.generate_syndromes(use_for_mwpm=True)
+            syndromes.append(syndrome)
+            flips.append(flip)
+            n_identities += n_id
+
+        syndromes = np.concatenate(syndromes)
+        flips = np.concatenate(flips)
+
+        # split into chunks to reduce memory footprint later
+        batch_size = self.training_settings["batch_size_train"]
         n_splits = syndromes.shape[0] // batch_size + 1
 
         syndromes = np.array_split(syndromes, n_splits)
@@ -334,7 +387,7 @@ class LSTrainer_v2:
             n_repetitions = 1
 
         # create full dataset, split into smaller "batches"
-        syndromes, flips, n_trivial = self.create_split_train_set()
+        syndromes, flips, n_trivial = self.create_multi_p_set()
         # create set of graphs from split syndrome set
         graph_set = self.create_graph_set(syndromes, flips, n_trivial)
         print("Number of dimension partitions:",n_dim_iter)
@@ -353,6 +406,7 @@ class LSTrainer_v2:
                     self.training_history["alt_train_score"].append(alt_metric)
                     # validation
                     val_accuracy, val_bal_acc = self.evaluate_test_set_v2(val_graphs)
+                    print("Validation accuracy:",val_accuracy)
                     if metric == None or metric == "accuracy":
                         self.training_history["val_score"].append(val_accuracy)
                         self.training_history["alt_val_score"].append(val_bal_acc)

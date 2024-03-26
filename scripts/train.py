@@ -3,7 +3,7 @@ import torch
 import argparse
 import sys
 sys.path.append("../")
-from src.models import GraphNN, SimpleGraphNN
+from src.models import GraphNN, SimpleGraphNNV4
 from src.training import LSTrainer, LSTrainer_v2
 import os
 import logging
@@ -19,8 +19,8 @@ def main():
     args = parser.parse_args() 
     
     # create a model
-    model = GraphNN()
-    #model = SimpleGraphNN()
+    #model = GraphNN()
+    model = SimpleGraphNNV4()
     config = Path(args.configuration)
     
     # check if model should be saved
