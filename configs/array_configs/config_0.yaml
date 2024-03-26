@@ -26,5 +26,5 @@ training_settings:
   search_radius: 0.01
   device: cuda
   resume_training: False
-  score_decay: 0.0002
-  metric: "balanced"
+  score_decay: 0.0001
+  metric: "accuracy"
