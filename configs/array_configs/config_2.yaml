@@ -16,15 +16,15 @@ training_settings:
   comment: "d5_d_t_5_240326-113253.pt"
   suffix: "2"
   seed: Null
-  dataset_size: 600000 
-  batch_size_train: 100000
+  dataset_size: 300000 
+  batch_size_train: 10000
   validation_set_size: 40000
-  batch_size_val: 20000 
+  batch_size_val: 10000 
   n_selections: 100
   repeat_selection: True
   n_repetitions: 6
   search_radius: 0.01
   device: cuda
-  resume_training: False
+  resume_training: True
   score_decay: 0.0001
   metric: "accuracy"

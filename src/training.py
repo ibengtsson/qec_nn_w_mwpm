@@ -70,7 +70,6 @@ class LSTrainer_v2:
             path = self.save_dir / (model_name + ".pt")
         else:
             path = self.save_dir / (self.save_name + ".pt")
-
         self.optimal_weights = self.model.state_dict()
         if self.training_settings["resume_training"]:
             attributes = {
@@ -97,7 +96,6 @@ class LSTrainer_v2:
 
         # update attributes and load model with trained weights
         self.training_history_prev = saved_attributes["training_history"]
-
         # older models do not have the attribute "best_val_accuracy"
         # if not "best_val_score" in self.training_history:
         #     self.training_history["best_val_score"] = -1
@@ -393,7 +391,14 @@ class LSTrainer_v2:
         print("Number of dimension partitions:",n_dim_iter)
         partial_start_t = datetime.now()
         for i in range(n_dim_iter*n_repetitions):
-                old_acc = ls.return_topscore()
+                if self.training_settings["resume_training"] and i == 0:
+                    accuracy, bal_acc = ls.run_inference(graph_set)
+                    if metric is None or metric=="accuracy":
+                        old_acc = accuracy
+                    elif metric=="balanced":
+                        old_acc = bal_acc
+                else:
+                    old_acc = ls.return_topscore()
                 ls.step_split_data(graph_set)
                 new_acc = ls.return_topscore()
                 # we add new accuracy and i after each improvement
