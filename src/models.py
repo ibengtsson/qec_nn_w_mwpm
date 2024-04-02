@@ -558,7 +558,8 @@ class SimpleGraphNNV4(nn.Module):
         super().__init__()
         
         # Weight embedding
-        self.weight_emb = nn.Linear(3, 1)
+        self.weight_emb_one = nn.Linear(3, 16)
+        self.weight_emb_two = nn.Linear(16, 1)
 
         # GCN layers
         channels = [n_node_features] + hidden_channels_GCN
@@ -601,7 +602,9 @@ class SimpleGraphNNV4(nn.Module):
         w = edge_attr[:, [0]]
         c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
         
-        w = self.weight_emb(torch.cat([w, c], dim=-1))
+        w = self.weight_emb_one(torch.cat([w, c], dim=-1))
+        w = self.activation(w)
+        w = self.weight_emb_two(w)
         w = self.activation(w)
         
         # graph layers
