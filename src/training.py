@@ -12,7 +12,7 @@ import copy
 from src.utils import parse_yaml, inference, predict_mwpm, predict_mwpm_nested
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import GraphNN, GraphAttention, GraphNNV2, SimpleGraphNNV4
+from src.models import GraphNN, GraphAttention, GraphNNV2, SimpleGraphNNV6
 from src.losses import MWPMLoss, MWPMLoss_v2, MWPMLoss_v3, NestedMWPMLoss, MWPMLoss_v4
 
 
@@ -72,7 +72,7 @@ class ModelTrainer:
         ):
             torch.cuda.set_device(self.device)
 
-        self.model = SimpleGraphNNV4(
+        self.model = SimpleGraphNNV6(
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],
             hidden_channels_MLP=model_settings["hidden_channels_MLP"],
         ).to(self.device)
