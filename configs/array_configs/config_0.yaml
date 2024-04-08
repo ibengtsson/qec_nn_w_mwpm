@@ -1,6 +1,6 @@
 paths:
   save_dir: ../training_outputs/
-  saved_model_path: ../training_outputs/d5_d_t_5_240325-233058_1.pt
+  saved_model_path: ../training_outputs/d5_d_t_5_240316-142335_load_f_d5_d_t_5_240315-152724.pt
 graph_settings:
   experiment: "z"
   code_size: 5
@@ -13,17 +13,17 @@ graph_settings:
   power: 2
   n_classes: 1
 training_settings:
-  comment: "d5_d_t_5_240325-233058_1.pt"
+  comment: "SimpleNetworkV6, score decay 0.00001, search radius 0.001, number of selections 25"
   suffix: "0"
   seed: Null
   dataset_size: 300000
   batch_size_train: 10000
   validation_set_size: 40000
   batch_size_val: 10000  
-  n_selections: 100
+  n_selections: 25
   repeat_selection: True
   n_repetitions: 6
-  search_radius: 0.01
+  search_radius: 0.001
   device: cuda
   resume_training: True
   score_decay: 0.00001

@@ -1,6 +1,6 @@
 paths:
   save_dir: ../training_outputs/
-  saved_model_path: ../training_outputs/d5_d_t_5_240326-113253.pt
+  saved_model_path: ../training_outputs/model_240327-133351_0_load_f_d5_d_t_5_240325-233058.pt
 graph_settings:
   experiment: "z"
   code_size: 5
@@ -19,13 +19,13 @@ training_settings:
   dataset_size: 10000
   batch_size_train: 1000
   validation_set_size: 10000
-  batch_size_val: 100
+  batch_size_val: 1000
   n_selections: 1000
   repeat_selection: False
   n_repetitions: 3
   search_radius: 0.001
   device: cuda
-  resume_training: True
+  resume_training: False
   score_decay: 0.0001
   metric: "accuracy"
 
