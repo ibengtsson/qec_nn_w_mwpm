@@ -1,6 +1,6 @@
 paths:
   save_dir: ../training_outputs/
-  saved_model_path: ../training_outputs/training_outputs/d5_d_t_5_240325-233058_1.pt
+  saved_model_path: ../training_outputs/d5_d_t_5_240325-233058_1.pt
 graph_settings:
   experiment: "z"
   code_size: 5
