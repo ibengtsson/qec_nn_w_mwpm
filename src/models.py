@@ -413,8 +413,8 @@ class SimpleGraphNNV6(nn.Module):
 
     def __init__(
         self,
-        hidden_channels_GCN=[32, 64],
-        hidden_channels_MLP=[64],
+        hidden_channels_GCN=[128,256],
+        hidden_channels_MLP=[128],
         n_node_features=5,
     ):
         super().__init__()
