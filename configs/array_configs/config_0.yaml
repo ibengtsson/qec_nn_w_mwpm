@@ -1,6 +1,6 @@
 paths:
   save_dir: ../training_outputs/
-  saved_model_path: ../training_outputs/d5_d_t_5_240325-233058_1.pt
+  saved_model_path: ../training_outputs/d5_d_t_5_240408-104109_load_f_d5_d_t_5_240404-131907.pt
 graph_settings:
   experiment: "z"
   code_size: 5
@@ -13,7 +13,7 @@ graph_settings:
   power: 2
   n_classes: 1
 training_settings:
-  comment: "SimpleNetworkV4, score decay 0.00001, search radius 0.001, number of selections 25"
+  comment: "SimpleNetworkV6, score decay 0.00001, search radius 0.001, number of selections 25"
   suffix: "0"
   seed: Null
   dataset_size: 300000
