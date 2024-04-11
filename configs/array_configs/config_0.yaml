@@ -13,18 +13,18 @@ graph_settings:
   power: 2
   n_classes: 1
 training_settings:
-  comment: "SimpleNetworkV6, score decay 0.00001, search radius 0.001, number of selections 25"
+  comment: "SimpleNetworkV6, score decay 0.0001, search radius 0.01, number of selections 100"
   suffix: "0"
   seed: Null
-  dataset_size: 300000
+  dataset_size: 400000
   batch_size_train: 10000
   validation_set_size: 40000
   batch_size_val: 10000  
-  n_selections: 25
+  n_selections: 100
   repeat_selection: True
   n_repetitions: 6
-  search_radius: 0.001
+  search_radius: 0.01
   device: cuda
   resume_training: True
-  score_decay: 0.00001
+  score_decay: 0.0001
   metric: "accuracy"

@@ -426,7 +426,25 @@ class LSTrainer_v2:
                     self.training_history["partial_time"].append(partial_t)
                     if self.save_model:
                         self.save_model_w_training_settings()
-               
+                elif i%500 == 0:
+                    alt_metric = ls.return_alternative_metric()
+                    self.training_history["train_score"].append(new_acc)
+                    self.training_history["iter_improvement"].append(i)
+                    self.training_history["alt_train_score"].append(alt_metric)
+                    val_accuracy, val_bal_acc = self.evaluate_test_set_v2(val_graphs)
+                    print("Validation accuracy:",val_accuracy)
+                    if metric == None or metric == "accuracy":
+                        self.training_history["val_score"].append(val_accuracy)
+                        self.training_history["alt_val_score"].append(val_bal_acc)
+                        if val_accuracy > self.training_history["best_val_score"]:
+                            self.training_history["best_val_score"] = val_accuracy
+                    elif metric == "balanced":
+                        self.training_history["val_score"].append(val_bal_acc)
+                        self.training_history["alt_val_score"].append(val_accuracy)
+                        if val_bal_acc > self.training_history["best_val_score"]:
+                            self.training_history["best_val_score"] = val_bal_acc
+                    if self.save_model:
+                        self.save_model_w_training_settings()         
         tot_t = datetime.now() - tot_start_t
         self.training_history["tot_time"]=tot_t
         if self.save_model:
