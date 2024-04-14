@@ -428,6 +428,7 @@ class MWPMLoss_v4(torch.autograd.Function):
         desired_weights = desired_weights.to(edge_weights.device)
         bias_reversal = bias_reversal.to(edge_weights.device)
         
+
         first_log = torch.clamp(torch.log(edge_weights), min=-100, max=None)
         second_log = torch.clamp(torch.log(1 - edge_weights), min=-100, max=None)
         loss = (-(desired_weights * first_log + (1 - desired_weights) * second_log) * bias_reversal).mean() 

@@ -47,8 +47,8 @@ def main():
     print(f"Moved model to {device} and loaded pre-trained weights.")
 
     # settings
-    n_graphs = int(1e5)
-    n_graphs_per_sim = int(1e3)
+    n_graphs = int(1e6)
+    n_graphs_per_sim = int(1e5)
     p = 1e-3
 
     m_nearest_nodes = model_data["graph_settings"]["m_nearest_nodes"]

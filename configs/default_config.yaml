@@ -1,6 +1,6 @@
 paths:
   save_dir: ../training_outputs/
-  saved_model_path: ../training_outputs/d5_d_t_5_240320-141138.pt
+  saved_model_path: ../training_outputs/d5_d_t_5_240408-104950_load_f_d5_d_t_5_240403-133555.pt
 model_settings:
   hidden_channels_GCN:
     - 256
@@ -12,7 +12,7 @@ graph_settings:
   code_size: 5
   repetitions: 5
   min_error_rate: 0.001
-  max_error_rate: 0.005
+  max_error_rate: 0.001
   m_nearest_nodes: 20
   n_node_features: 5
   power: 2
@@ -20,11 +20,11 @@ graph_settings:
 training_settings:
   seed: Null
   dataset_size: 1000000
-  validation_set_size: 30000
-  batch_size: 80000
-  tot_epochs: 1500
-  lr: 0.0001
+  validation_set_size: 15000
+  batch_size: 40000
+  tot_epochs: 2500
+  lr: 0.000001
   device: cuda
   resume_training: True
-  current_epoch: 1000
-  comment: "Continuation, testing scaled loss again."
+  current_epoch: 1500
+  comment: "Continuation, only one error rate. Not scaled loss."
