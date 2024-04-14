@@ -321,12 +321,13 @@ def get_batch_of_graphs(
         exp_graph_edge_index = knn_graph(exp_node_coords, m_nearest_nodes, batch=_batch_labels)
         
         # need to remap what exp_graph_edge_index represent
-        edge_map = torch.arange(x.shape[0], dtype=torch.int32)[x[:, column_label[experiment]] == 1]
+        edge_map = torch.arange(x.shape[0], dtype=torch.int32).to(device)
+        edge_map = edge_map[x[:, column_label[experiment]] == 1]
         exp_graph_edge_index[0, :] = edge_map[exp_graph_edge_index[0, :]]
         exp_graph_edge_index[1, :] = edge_map[exp_graph_edge_index[1, :]]
         
         # combine and remove duplicates
-        edge_index = torch.cat([complete_graph_edge_index, exp_graph_edge_index], axis=1)
+        edge_index = torch.cat([complete_graph_edge_index, exp_graph_edge_index.to(device)], axis=1)
         edge_index = coalesce(edge_index)
         edge_index = to_undirected(edge_index)
 
