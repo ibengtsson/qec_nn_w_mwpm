@@ -12,6 +12,8 @@ from torch_geometric.utils import (
     unbatch_edge_index,
     cumsum,
     degree,
+    scatter,
+    coalesce,
 )
 
 
@@ -169,6 +171,108 @@ def outside_distance(x, y, width, wrap_axis=1, manhattan=False):
     else:
         return ds.sum(axis=1)
 
+def add_virtual_nodes(
+    where_to_add,
+    x, 
+    edge_index, 
+    n_node_features, 
+    column_label, 
+    batch_labels, 
+    experiment,
+    device,
+    ):
+    virtual_nodes = torch.zeros(
+        (np.sum(where_to_add), n_node_features), dtype=torch.float32
+    ).to(device)
+
+    # let virtual nodes be marked by -1 (momentarily) so we can create a label for them
+    virtual_nodes[:, column_label[experiment]] = -1
+    # virtual_nodes[:, 2:-1] = syndromes.shape[1] // 2
+    # virtual_nodes[:, -1] = syndromes.shape[-1] // 2
+    virtual_nodes[:, 2:] = 0
+    
+    # create batch labels
+    virtual_batch_labels = (
+        (torch.arange(0, where_to_add.shape[0])[where_to_add.astype(bool)])
+        .long()
+        .to(device)
+    )
+
+    # add virtual nodes to node list and extend batch labels
+    x = torch.cat((x, virtual_nodes), axis=0)
+
+    batch_labels = torch.cat((batch_labels, virtual_batch_labels), axis=0)
+
+    # now, let's sort the nodes in groups so we can have a sorted batch label array
+    ind_range = torch.arange(x.shape[0], dtype=torch.int64).to(device)
+    sort_ind = group_argsort(ind_range, batch_labels, return_consecutive=True)
+    _x = torch.zeros_like(x)
+    _x[sort_ind, :] = x
+    x = _x
+    del _x
+
+    # identify which nodes that are virtual in the sorted array, the replace -1 with +1 to mark stabilizer as usual
+    mask = (x[:, column_label[experiment]] == -1).to(device)
+    virtual_node_labels = ind_range[mask]
+    x[mask, column_label[experiment]] = 1
+
+    # sort batch labels
+    batch_labels, _ = torch.sort(batch_labels)
+
+    # extend edge indices
+    _, unique_counts = torch.unique(batch_labels, return_counts=True)
+    cum_sum = torch.cumsum(unique_counts, dim=0)
+    low_ind = torch.cat(
+        [torch.tensor([0], device=device), cum_sum[where_to_add.astype(bool)]]
+    )
+    high_ind = torch.cat(
+        [
+            cum_sum[where_to_add.astype(bool)] - 1,
+            torch.tensor([batch_labels.shape[0]], device=device),
+        ]
+    )
+
+    index_remap = torch.cat(
+        [
+            torch.ones(high - low, dtype=torch.int64) * i
+            for i, (high, low) in enumerate(zip(high_ind, low_ind))
+        ]
+    ).to(device)
+
+    # add offset introduced by squeezing in virtual nodes
+    edge_index[0, :] += index_remap[edge_index[0, :]]
+    edge_index[1, :] += index_remap[edge_index[1, :]]
+
+    # add the edges created by virtual nodes
+    cum_sum = torch.cat([torch.tensor([0], device=device), cum_sum])
+    low_ind = cum_sum[0:-1][where_to_add.astype(bool)]
+    high_ind = cum_sum[1:][where_to_add.astype(bool)] - 1
+
+    target_nodes = torch.cat(
+        [ind_range[low:high] for low, high in zip(low_ind, high_ind)]
+    )
+    source_nodes = torch.cat(
+        [
+            torch.ones(sz, dtype=torch.int64, device=device) * ind
+            for sz, ind in zip(unique_counts[where_to_add.astype(bool)] - 1, high_ind)
+        ]
+    )
+
+    new_edges = torch.cat(
+        [
+            torch.stack([target_nodes, source_nodes]),
+            torch.stack([source_nodes, target_nodes]),
+        ],
+        dim=1,
+    )
+
+    # append to existing indices
+    edge_index = torch.cat([edge_index, new_edges], dim=1)
+
+    # sort edge index
+    edge_index = sort_edge_index(edge_index)
+    
+    return x, edge_index, batch_labels, virtual_node_labels
 
 def get_batch_of_graphs(
     syndromes,
@@ -178,6 +282,10 @@ def get_batch_of_graphs(
     power=2.0,
     device=torch.device("cpu"),
 ):
+    # create dictionaries containing help labels
+    stabilizer_label = {"z": 3, "x": 1}
+    column_label = {"z": 1, "x": 0}
+    
     syndromes = syndromes.astype(np.float32)
     defect_inds = np.nonzero(syndromes)
     defects = syndromes[defect_inds]
@@ -201,115 +309,69 @@ def get_batch_of_graphs(
     batch_labels = torch.tensor(node_features[:, batch_col]).long().to(device)
 
     # get edge indices (and ensure that the graph is undirected)
+    # we'll run knn two times, one for the complete graph and one for only nodes of type experiment
     if m_nearest_nodes:
-        edge_index = knn_graph(x[:, 2:], m_nearest_nodes, batch=batch_labels)
+        
+        # run knn on all nodes
+        complete_graph_edge_index = knn_graph(x[:, 2:], m_nearest_nodes, batch=batch_labels)
+
+        # run on experiment nodes
+        exp_node_coords = x[x[:, column_label[experiment]] == 1, 2:]
+        _batch_labels = batch_labels[x[:, column_label[experiment]] == 1]
+        exp_graph_edge_index = knn_graph(exp_node_coords, m_nearest_nodes, batch=_batch_labels)
+        
+        # need to remap what exp_graph_edge_index represent
+        edge_map = torch.arange(x.shape[0], dtype=torch.int32)[x[:, column_label[experiment]] == 1]
+        exp_graph_edge_index[0, :] = edge_map[exp_graph_edge_index[0, :]]
+        exp_graph_edge_index[1, :] = edge_map[exp_graph_edge_index[1, :]]
+        
+        # combine and remove duplicates
+        edge_index = torch.cat([complete_graph_edge_index, exp_graph_edge_index], axis=1)
+        edge_index = coalesce(edge_index)
         edge_index = to_undirected(edge_index)
 
     else:
+        # might now work for d > 7? k has a max value!
         max_nodes = np.count_nonzero(syndromes, axis=(1, 2, 3)).max()
         edge_index = knn_graph(x[:, 2:], max_nodes, batch=batch_labels)
         edge_index = to_undirected(edge_index)
-
-    # create virtual nodes for the graphs with odd number of nodes (counted per Z/X-class)
-    label = {"z": 3, "x": 1}
-    even_odd = np.count_nonzero(syndromes == label[experiment], axis=(1, 2, 3)) & 1
-
-    if even_odd.sum() > 0:
-        virtual_nodes = torch.zeros(
-            (np.sum(even_odd), n_node_features), dtype=torch.float32
-        ).to(device)
-        label = {"z": 1, "x": 0}
-
-        # let virtual nodes be marked by -1 (momentarily) so we can create a label for them
-        virtual_nodes[:, label[experiment]] = -1
-        # virtual_nodes[:, 2:-1] = syndromes.shape[1] // 2
-        # virtual_nodes[:, -1] = syndromes.shape[-1] // 2
-        virtual_nodes[:, 2:] = 0
         
+    # find which graphs have an odd number of stabilizers of type experiment
+    graphs_w_odd_exp_nodes = np.count_nonzero(syndromes == stabilizer_label[experiment], axis=(1, 2, 3)) & 1
 
-        # # create batch labels
-        virtual_batch_labels = (
-            (torch.arange(0, syndromes.shape[0])[even_odd.astype(bool)])
-            .long()
-            .to(device)
-        )
+    # # we need to ensure that all sub-graphs for the X/Z-syndrome contains an even number of nodes
+    # edge_type = (torch.stack([x[edge_index[0, :], column_label[experiment]] == 1, x[edge_index[1, :], column_label[experiment]] == 1], dim=0).sum(dim=0) == 2)
 
-        # add virtual nodes to node list and extend batch labels
-        x = torch.cat((x, virtual_nodes), axis=0)
-
-        batch_labels = torch.cat((batch_labels, virtual_batch_labels), axis=0)
-
-        # now, let's sort the nodes in groups so we can have a sorted batch label array
-        ind_range = torch.arange(x.shape[0], dtype=torch.int64).to(device)
-        sort_ind = group_argsort(ind_range, batch_labels, return_consecutive=True)
-        _x = torch.zeros_like(x)
-        _x[sort_ind, :] = x
-        x = _x
-        del _x
-
-        # identify which nodes that are virtual in the sorted array, the replace -1 with +1 to mark stabilizer as usual
-        mask = (x[:, label[experiment]] == -1).to(device)
-        virtual_node_labels = ind_range[mask]
-        x[mask, label[experiment]] = 1
-
-        # sort batch labels
-        batch_labels, _ = torch.sort(batch_labels)
-
-        # extend edge indices
-        _, unique_counts = torch.unique(batch_labels, return_counts=True)
-        cum_sum = torch.cumsum(unique_counts, dim=0)
-        low_ind = torch.cat(
-            [torch.tensor([0], device=device), cum_sum[even_odd.astype(bool)]]
-        )
-        high_ind = torch.cat(
-            [
-                cum_sum[even_odd.astype(bool)] - 1,
-                torch.tensor([batch_labels.shape[0]], device=device),
-            ]
-        )
-        index_remap = torch.cat(
-            [
-                torch.ones(high - low, dtype=torch.int64) * i
-                for i, (high, low) in enumerate(zip(high_ind, low_ind))
-            ]
-        ).to(device)
-
-        # add offset introduced by squeezing in virtual nodes
-        edge_index[0, :] += index_remap[edge_index[0, :]]
-        edge_index[1, :] += index_remap[edge_index[1, :]]
-
-        # add the edges created by virtual nodes
-        cum_sum = torch.cat([torch.tensor([0], device=device), cum_sum])
-        low_ind = cum_sum[0:-1][even_odd.astype(bool)]
-        high_ind = cum_sum[1:][even_odd.astype(bool)] - 1
-
-        target_nodes = torch.cat(
-            [ind_range[low:high] for low, high in zip(low_ind, high_ind)]
-        )
-        source_nodes = torch.cat(
-            [
-                torch.ones(sz, dtype=torch.int64, device=device) * ind
-                for sz, ind in zip(unique_counts[even_odd.astype(bool)] - 1, high_ind)
-            ]
-        )
-        new_edges = torch.cat(
-            [
-                torch.stack([target_nodes, source_nodes]),
-                torch.stack([source_nodes, target_nodes]),
-            ],
-            dim=1,
-        )
-
-        # append to existing indices
-        edge_index = torch.cat([edge_index, new_edges], dim=1)
-
-        # sort edge index
-        edge_index = sort_edge_index(edge_index)
+    # edges_for_exp = edge_index[:, edge_type]
+    # edge_batches = batch_labels[torch.unique(edges_for_exp[0, :])]
+    # graph_inds, counts = torch.unique(edge_batches, return_counts=True)
+    
+    # # indicate which graphs that do not have (experiment node --- experiment node) stabilizers
+    # graphs_w_no_exp_edges = np.ones(syndromes.shape[0], dtype=np.int32)
+    # graphs_w_no_exp_edges[graph_inds] = 0
+    
+    # # of the graphs that have (experiment node --- experiment node) stabilizers, 
+    # # find which gives sub-graphs with odd nodes of type experiment
+    # odds = (counts & 1).bool()
+    # subgraphs_w_odd_exp_nodes = np.zeros(syndromes.shape[0], dtype=np.int32)
+    # subgraphs_w_odd_exp_nodes[graph_inds[odds]] = 1
+        
+    if graphs_w_odd_exp_nodes.sum() > 0:
+        x, edge_index, batch_labels, virtual_node_labels = add_virtual_nodes(
+            graphs_w_odd_exp_nodes, 
+            x,
+            edge_index,
+            n_node_features,
+            column_label,
+            batch_labels,
+            experiment,
+            device,
+            )
     
     else:
         # make sure the indices are sorted in both cases
         edge_index = sort_edge_index(edge_index)
-
+    
     # compute edge attributes (we'll have one edge for inner-distance and one for outer-distance)
     wrap_axis = {"x": 1, "z": 0}
     in_dist = inside_distance(x[edge_index[0, :], 2:], x[edge_index[1, :], 2:])
@@ -322,24 +384,13 @@ def get_batch_of_graphs(
 
     dist = torch.cat([in_dist, out_dist], dim=0) ** power
 
-    # # if the edge is connected to a virtual node, let dist = 1
-    # # CAN BE IMPROVED
-    # if even_odd.sum() > 0:
-    #     virtual_edges = torch.isin(edge_index, virtual_node_labels)
-    #     virtual_edges_mask = torch.cat([torch.any(virtual_edges, dim=0)] * 2)
-    #     dist[virtual_edges_mask] = 1
-        
-    # normalise distance
-    norm_fun = lambda x: (x - x.min()) / (x.max() - x.min())
-    # dist = norm_fun(dist)
-
     # mark inner distance 0 and outer +1
     in_mark = torch.zeros_like(in_dist)
     out_mark = torch.ones_like(out_dist)
     
     # for edges connected to virtual nodes, the class label must be switched 
     # because the notion of outside/inside distance is changed 
-    if even_odd.sum() > 0:
+    if graphs_w_odd_exp_nodes.sum() > 0:
         virtual_edges = torch.isin(edge_index, virtual_node_labels).any(dim=0)
         in_mark[virtual_edges] = 1
         out_mark[virtual_edges] = 0
@@ -353,8 +404,7 @@ def get_batch_of_graphs(
     edge_index = torch.cat([edge_index, edge_index], dim=1)
 
     # mark which detectors that are of type experiment
-    label = {"z": 1, "x": 0}
-    detector_labels = x[:, label[experiment]] == 1
+    detector_labels = x[:, column_label[experiment]] == 1
 
     return x, edge_index, edge_attr, batch_labels, detector_labels
 
