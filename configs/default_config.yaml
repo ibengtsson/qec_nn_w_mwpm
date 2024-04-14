@@ -9,10 +9,10 @@ model_settings:
     - 256
 graph_settings:
   experiment: "z"
-  code_size: 5
-  repetitions: 5
+  code_size: 9
+  repetitions: 9
   min_error_rate: 0.001
-  max_error_rate: 0.001
+  max_error_rate: 0.005
   m_nearest_nodes: 20
   n_node_features: 5
   power: 2
@@ -21,10 +21,10 @@ training_settings:
   seed: Null
   dataset_size: 1000000
   validation_set_size: 15000
-  batch_size: 40000
-  tot_epochs: 2500
-  lr: 0.000001
+  batch_size: 10000
+  tot_epochs: 1500
+  lr: 0.00001
   device: cuda
-  resume_training: True
-  current_epoch: 1500
-  comment: "Continuation, only one error rate. Not scaled loss."
+  resume_training: False
+  current_epoch: 0
+  comment: "Attempt at d = 9."
