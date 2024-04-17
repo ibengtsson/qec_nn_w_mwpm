@@ -9,11 +9,11 @@ import random
 import pandas as pd
 import copy
 
-from src.utils import parse_yaml, inference, predict_mwpm, predict_mwpm_nested
+from src.utils import parse_yaml, attention_inference, predict_mwpm_attention
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import GraphNN, GraphAttention, GraphNNV2, SimpleGraphNNV6, GraphAttention
-from src.losses import MWPMLoss, MWPMLoss_v2, MWPMLoss_v3, NestedMWPMLoss, MWPMLoss_v4
+from src.models import GraphAttention
+from src.losses import AttentionMWPMLoss
 
 
 class ModelTrainer:
@@ -74,7 +74,6 @@ class ModelTrainer:
 
         self.model = GraphAttention(
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],
-            hidden_channels_MLP=model_settings["hidden_channels_MLP"],
         ).to(self.device)
         
         self.optimizer = torch.optim.Adam(
@@ -237,7 +236,7 @@ class ModelTrainer:
         for syndrome, flip in zip(syndromes, flips):
 
             n_syndromes += syndrome.shape[0]
-            _n_correct_preds = inference(
+            _n_correct_preds = attention_inference(
                 self.model,
                 syndrome,
                 flip,
@@ -246,7 +245,6 @@ class ModelTrainer:
                 device=self.device,
             )
             n_correct_preds += _n_correct_preds
-        # val_accuracy = (n_correct_preds) / n_syndromes
         val_accuracy = (n_correct_preds + n_identities) / n_graphs
 
         return val_accuracy
@@ -261,7 +259,7 @@ class ModelTrainer:
         n_batches = dataset_size // batch_size
         
         # set loss function
-        loss_fun = MWPMLoss_v4.apply
+        loss_fun = AttentionMWPMLoss.apply
         
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
@@ -319,7 +317,6 @@ class ModelTrainer:
                     edge_index,
                     edge_weights,
                     edge_classes,
-                    batch_labels,
                     flips,
                 )
                 loss.backward()
@@ -399,8 +396,7 @@ class ModelTrainer:
                 batch_labels,
             )
 
-            # preds.append(predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels))
-            preds.append(predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels))
+            preds.append(predict_mwpm_attention(edge_index, edge_weights, edge_classes))
         
         preds = np.concatenate(preds)
         flips = np.concatenate(flips)

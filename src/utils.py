@@ -11,6 +11,7 @@ import pandas as pd
 import sys
 import logging
 logging.disable(sys.maxsize)
+from torch_geometric.utils import to_dense_adj
 
 def time_it(func, reps, *args):
     start_t = datetime.datetime.now()
@@ -92,33 +93,8 @@ def inference(
     edge_index, edge_weights, edge_classes = model(
         x, edge_index, edge_attr, detector_labels, batch_labels,
     )
-    
-    if nested_tensors:
-        preds = predict_mwpm_nested(edge_index, edge_weights, edge_classes)
-    else:
-        preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
 
-    n_correct = (preds == flips).sum()
-    return n_correct
-
-def inference_TEST(
-    model: nn.Module,
-    syndromes: np.ndarray,
-    flips: np.ndarray,
-    experiment: str = "z",
-    m_nearest_nodes: int = 10,
-    device: torch.device = torch.device("cpu"),
-    nested_tensors: bool = False,
-):
-    # set model in inference mode
-    model.eval()
-    x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
-        syndromes, m_nearest_nodes, experiment=experiment, device=device
-    )
-    edge_index, edge_weights, edge_classes = model(
-        x, edge_index, edge_attr, detector_labels,
-    )
-    
+    edge_weights = torch.nn.functional.sigmoid(edge_weights)
     if nested_tensors:
         preds = predict_mwpm_nested(edge_index, edge_weights, edge_classes)
     else:
@@ -142,6 +118,94 @@ def inference_TEST(
     # print(df_confusion)
     return n_correct
 
+def inference_TEST(
+    model: nn.Module,
+    syndromes: np.ndarray,
+    flips: np.ndarray,
+    experiment: str = "z",
+    m_nearest_nodes: int = 10,
+    device: torch.device = torch.device("cpu"),
+    nested_tensors: bool = False,
+):
+    # set model in inference mode
+    model.eval()
+    x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+        syndromes, m_nearest_nodes, experiment=experiment, device=device
+    )
+    edge_index, edge_weights, edge_classes = model(
+        x, edge_index, edge_attr, detector_labels,
+    )
+
+    if nested_tensors:
+        preds = predict_mwpm_nested(edge_index, edge_weights, edge_classes)
+    else:
+        preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
+
+    n_correct = (preds == flips).sum()
+
+    # # confusion plot
+    # true_identity = ((preds == 0) & (flips == 0)).sum() / (flips == 0).sum() * 100
+    # true_flip = ((preds == 1) & (flips == 1)).sum() / (flips == 1).sum() * 100
+    # false_identity = ((preds == 0) & (flips == 1)).sum() / (flips == 1).sum() * 100
+    # false_flip = ((preds == 1) & (flips == 0)).sum() / (flips == 0).sum() * 100
+
+    # confusion_data = [[true_identity, false_identity], [false_flip, true_flip]]
+    # df_confusion = pd.DataFrame(
+    #     confusion_data,
+    #     index=["Predicted 0 (%)", "Predicted 1 (%)"],
+    #     columns=["True 0", "True 1"],
+    # )
+    # pd.set_option("display.precision", 2)
+    # print(df_confusion)
+    return n_correct
+
+def attention_inference(
+    model: nn.Module,
+    syndromes: np.ndarray,
+    flips: np.ndarray,
+    experiment: str = "z",
+    m_nearest_nodes: int = 10,
+    device: torch.device = torch.device("cpu"),
+):
+    # set model in inference mode
+    model.eval()
+    x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+        syndromes, m_nearest_nodes, experiment=experiment, device=device
+    )
+    edge_index, edge_weights, edge_classes = model(
+        x, edge_index, edge_attr, detector_labels, batch_labels,
+    )
+    
+    edge_weights = torch.nn.functional.sigmoid(edge_weights)
+    preds = predict_mwpm_attention(edge_index, edge_weights, edge_classes)
+
+    n_correct = (preds == flips).sum()
+
+    return n_correct
+
+
+def predict_mwpm_attention(
+    edge_index: torch.Tensor,
+    edge_weights: torch.Tensor,
+    edge_classes: torch.Tensor,
+):
+    preds = []
+    for edges, weights, classes in zip(edge_index, edge_weights, edge_classes):
+        
+        # begin by removing the trailing zeros from the padding
+        mask = edges[:, 0] != edges[:, 1]
+        edges = edges[mask, :].T
+        weights = weights[mask]
+        classes = classes[mask]
+        
+        # run MWPM
+        edges = edges.cpu().numpy()
+        weights = weights.detach().cpu().numpy().squeeze()
+        classes = classes.detach().cpu().numpy().squeeze()
+        p = mwpm_prediction(edges, weights, classes)
+        preds.append(p)
+
+    return np.array(preds)
 
 def predict_mwpm(
     edge_index: torch.Tensor,
@@ -159,12 +223,13 @@ def predict_mwpm(
 
     preds = []
     for edges, weights, classes in zip(edges_p_graph, weights_p_graph, classes_p_graph):
+        
         edges = edges.cpu().numpy()
         weights = weights.detach().cpu().numpy()
         classes = classes.detach().cpu().numpy()
         p = mwpm_prediction(edges, weights, classes)
         preds.append(p)
-        
+
     return np.array(preds)
 
 
@@ -199,76 +264,76 @@ def predict_mwpm_with_pool(
     return np.array(preds)
 
 def predict_mwpm_nested(edge_index, edge_weights, edge_classes):
-    
+
     preds = []
     for edges, weights, classes in zip(edge_index, edge_weights, edge_classes):
-        
+
         # find which (of the two) egdes that have the minimum weight for each node pair
         weights = torch.cat([weights[::2], weights[1::2]], dim=1)
         classes = torch.cat([classes[::2], classes[1::2]], dim=1)
         edges = edges[:, ::2]
-        
+
         weights, min_inds = torch.min(weights, dim=1)
         classes = classes[range(edges.shape[1]), min_inds]
-        
+
         # do a softmax on the weights
         weights = torch.nn.functional.softmax(weights, dim=0)
-        
+
         # move to CPU and run MWPM
         edges = edges.detach().cpu().numpy()
         weights = weights.detach().cpu().numpy()
         classes = classes.detach().cpu().numpy()
         p = mwpm_prediction(edges, weights, classes)
         preds.append(p)
-    
+
     return np.array(preds)
 
 def mwpm_prediction(edges, weights, classes):
 
     classes = classes.astype(np.int32)
-    
+
     # if only one edge, we only have one matching
     if edges.shape[1] == 1:
         flip = classes.sum() & 1
         return flip
-    
+
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
-    
+
     matched_edges = mwpm(edges_w_weights)
-    
+
     # need to make sure matched_edges is sorted
     matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
     classes = np.array([edges_w_classes[edge] for edge in matched_edges])
-    flip = classes.sum() & 1 
+    flip = classes.sum() & 1
 
     return flip
 
-    
+
 def mwpm_w_grad(edges, weights, classes):
-    
+
     classes = (classes > 0).astype(np.int32)
     # if only one edge, we only have one matching
     if edges.shape[1] == 1:
         flip = classes.sum() & 1
         gradient = torch.ones(weights.shape)
         return flip, gradient
-    
+
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
     edge_range = {tuple(sorted(x)): i for i, x in enumerate(edges.T)}
-    
+
     matched_edges = mwpm(edges_w_weights)
 
     # need to make sure matched_edges is sorted
     matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
 
     classes = np.array([edges_w_classes[edge] for edge in matched_edges])
-    flip = classes.sum() & 1 
+    flip = classes.sum() & 1
     match_inds = [edge_range[edge] for edge in matched_edges]
     mask = np.zeros(weights.shape, dtype=bool)
     mask[match_inds] = True
-    
+
     gradient = torch.zeros(weights.shape)
     gradient[mask] = 1
 
@@ -276,31 +341,35 @@ def mwpm_w_grad(edges, weights, classes):
 
 def mwpm_w_grad_v2(edges, weights, classes):
 
-    # classes = (classes > 0.5).astype(np.int32)
+    if np.unique(edges).shape[0] & 1:
+        print("Warning!")
+        print(edges)
+
     classes = classes.astype(np.int32)
-    
+
     # if only one edge, we only have one matching
     if edges.shape[1] == 1:
         flip = classes.sum() & 1
         mask = np.ones(weights.shape, dtype=bool)
         return flip, mask
-    
-    
+
+
     edges_w_weights = {tuple(sorted(x)): w for x, w in zip(edges.T, weights)}
     edges_w_classes = {tuple(sorted(x)): c for x, c in zip(edges.T, classes)}
     edge_range = {tuple(sorted(x)): i for i, x in enumerate(edges.T)}
-    
+
     matched_edges = mwpm(edges_w_weights)
+
 
     # need to make sure matched_edges is sorted
     matched_edges = [tuple(sorted((x[0], x[1]))) for x in matched_edges]
 
     classes = np.array([edges_w_classes[edge] for edge in matched_edges])
-    flip = classes.sum() & 1 
+    flip = classes.sum() & 1
     match_inds = [edge_range[edge] for edge in matched_edges]
     mask = np.zeros(weights.shape, dtype=bool)
     mask[match_inds] = True
-           
+
     return flip, mask
 
-    
+
