@@ -2,7 +2,7 @@ from pathlib import Path
 import argparse
 import sys
 sys.path.append("../")
-from src.training import ModelTrainer
+from src.attention_training import ModelTrainer
 import os
 if "alvis" in os.uname().nodename:
     os.environ["QECSIM_CFG"] = "/cephyr/users/isakbe/Alvis"
@@ -28,21 +28,9 @@ def main():
     
     # initialise model trainer
     trainer = ModelTrainer(config=config, save_model=save_or_not, seeds=True)
-    
-    # measure a benchmark
-    # print("BEFORE TRAINING:")
-    # _, _, confusion_df = trainer.check_performance()
-    # print(confusion_df)
 
     # train model
     trainer.train()
-    
-    # check performance
-    # print("AFTER TRAINING:")
-    # _, _, confusion_df = trainer.check_performance()
-    
-    # print(confusion_df)
-    
 
 if __name__ == "__main__":
     main()

@@ -3,7 +3,7 @@ import torch
 import sys
 
 sys.path.append("../")
-from src.models import GraphNN, SimpleGraphNN
+from src.models import GraphNN, SimpleGraphNNV5
 from src.simulations import SurfaceCodeSim
 from src.utils import inference, inference_TEST
 
@@ -33,11 +33,11 @@ def main():
 
     gcn_layers = model_data["model_settings"]["hidden_channels_GCN"]
     mlp_layers = model_data["model_settings"]["hidden_channels_MLP"]
-    
+
     # model = GraphNN(
     #     hidden_channels_GCN=gcn_layers, hidden_channels_MLP=mlp_layers
     # ).to(device)
-    model = SimpleGraphNN(
+    model = SimpleGraphNNV5(
         hidden_channels_GCN=gcn_layers,
         hidden_channels_MLP=mlp_layers,
         ).to(device)
@@ -48,7 +48,7 @@ def main():
 
     # settings
     n_graphs = int(1e5)
-    n_graphs_per_sim = int(5e3)
+    n_graphs_per_sim = int(1e3)
     p = 1e-3
 
     m_nearest_nodes = model_data["graph_settings"]["m_nearest_nodes"]
@@ -64,46 +64,41 @@ def main():
     # read code distance and number of repetitions from file name
     file_name = model_path.name
     splits = file_name.split("_")
-    code_sz = int(splits[0][1])
+    code_sz = int(splits[0][1]) 
     reps = int(splits[3].split(".")[0])
-
-    # go through partitions
-    correct_preds = 0
-    n_trivial = 0
-    for _ in range(n_partitions):
-        sim = SurfaceCodeSim(
+    
+    # initialise simulation
+    sim = SurfaceCodeSim(
             reps,
             code_sz,
             p,
             n_shots=n_graphs_per_sim,
         )
-
+    
+    # go through partitions
+    correct_preds = 0
+    n_trivial = 0
+    for _ in range(n_partitions):
         syndromes, flips, n_identities = sim.generate_syndromes(use_for_mwpm=True)
 
         # add identities to # trivial predictions
         n_trivial += n_identities
 
         # run inference
-        _correct_preds = inference_TEST(
+        _correct_preds = inference(
             model, syndromes, flips, m_nearest_nodes=m_nearest_nodes, device=device
         )
         correct_preds += _correct_preds
 
     # run the remaining graphs
     if remaining > 0:
-        sim = SurfaceCodeSim(
-            reps,
-            code_sz,
-            p,
-            n_shots=remaining,
-        )
 
         syndromes, flips, n_identities = sim.generate_syndromes(use_for_mwpm=True)
-        
+
         # add identities to # trivial predictions
         n_trivial += n_identities
 
-        _correct_preds = inference_TEST(
+        _correct_preds = inference(
             model, syndromes, flips, m_nearest_nodes=m_nearest_nodes, device=device
         )
         correct_preds += _correct_preds
