@@ -3,8 +3,8 @@ paths:
   saved_model_path: ../training_outputs/d5_d_t_5_240414-212528.pt
 model_settings:
   hidden_channels_GCN:
-    - 512
-    - 512
+    - 128
+    - 128
   hidden_channels_MLP:
     - 256
     - 256
@@ -21,11 +21,11 @@ graph_settings:
 training_settings:
   seed: Null
   dataset_size: 1000000
-  validation_set_size: 100000
+  validation_set_size: 30000
   batch_size: 60000
-  tot_epochs: 3000
-  lr: 0.000001
+  tot_epochs: 1000
+  lr: 0.00001
   device: cuda
-  resume_training: True
-  current_epoch: 2000
-  comment: "Continuation."
+  resume_training: False
+  current_epoch: 0
+  comment: "New attention test, larger batch size."
