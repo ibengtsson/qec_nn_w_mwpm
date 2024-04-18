@@ -265,6 +265,8 @@ class ModelTrainer:
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
         n_node_features = self.graph_settings["n_node_features"]
         power = self.graph_settings["power"]
+        experiment = self.graph_settings["experiment"]
+        stabilizer_label = {"z": 3, "x": 1}
 
         sims = self.initialise_simulations()
 
@@ -283,10 +285,10 @@ class ModelTrainer:
             else:
                 seed = None
             
+            n = 8
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
-
             for _ in range(n_batches):
                 
                 # simulate data as we go
@@ -294,35 +296,52 @@ class ModelTrainer:
                 syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True, seed=seed)
                 epoch_n_trivial += n_trivial
                 
-                x, edge_index, edge_attr, batch_labels, detector_labels = (
-                    get_batch_of_graphs(
-                        syndromes,
-                        m_nearest_nodes,
-                        n_node_features=n_node_features,
-                        power=power,
-                        device=self.device,
-                    )
-                )
+                # count nodes per graphs and add 1 where we need to add virtual nodes
+                n_nodes_p_graph = (np.count_nonzero(syndromes, axis=(1, 2, 3)) + 
+                                    (np.count_nonzero(syndromes == stabilizer_label[experiment], axis=(1, 2, 3)) & 1))
 
-                n_graphs = syndromes.shape[0]
-                self.optimizer.zero_grad()
-                edge_index, edge_weights, edge_classes = self.model(
-                    x,
-                    edge_index,
-                    edge_attr,
-                    detector_labels,
-                    batch_labels,
-                )
-                loss = loss_fun(
-                    edge_index,
-                    edge_weights,
-                    edge_classes,
-                    flips,
-                )
-                loss.backward()
-                self.optimizer.step()
-                train_loss += loss.item() * n_graphs
-                epoch_n_graphs += n_graphs
+                sort_args = np.argsort(n_nodes_p_graph)
+                    
+                # sort syndromes and flips
+                syndromes = syndromes[sort_args, ...]
+                flips = flips[sort_args]
+                
+                # split into chunks having graphs of similar number of nodes
+                syndrome_chunks = np.array_split(syndromes, n)
+                flip_chunks = np.array_split(flips, n)
+                
+                # we run an inner loop to try and batch graphs having a similar number of nodes together
+                for s, f in zip(syndrome_chunks, flip_chunks):
+                    
+                    x, edge_index, edge_attr, batch_labels, detector_labels = (
+                        get_batch_of_graphs(
+                            s,
+                            m_nearest_nodes,
+                            n_node_features=n_node_features,
+                            power=power,
+                            device=self.device,
+                        )
+                    )
+
+                    n_graphs = s.shape[0]
+                    self.optimizer.zero_grad()
+                    edge_index, edge_weights, edge_classes = self.model(
+                        x,
+                        edge_index,
+                        edge_attr,
+                        detector_labels,
+                        batch_labels,
+                    )
+                    loss = loss_fun(
+                        edge_index,
+                        edge_weights,
+                        edge_classes,
+                        f,
+                    )
+                    loss.backward()
+                    self.optimizer.step()
+                    train_loss += loss.item() * n_graphs
+                    epoch_n_graphs += n_graphs
 
             # compute losses and logical accuracy
             # ------------------------------------
