@@ -564,11 +564,11 @@ class AttentionMWPMLoss(torch.autograd.Function):
             # begin by removing the trailing zeros from the padding
             mask = edges[:, 0] != edges[:, 1]
             edges = edges[mask, :].T
-            weights = weights[mask]
+            weights = weights[mask].cpu()
             classes = classes[mask]
 
             edges = edges.cpu().numpy()
-            _weights = weights.cpu().numpy().squeeze()
+            _weights = weights.numpy().squeeze()
             classes = classes.cpu().numpy().squeeze()
 
             prediction, match_mask = mwpm_w_grad_v2(edges, _weights, classes)
