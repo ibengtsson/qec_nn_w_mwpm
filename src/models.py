@@ -879,14 +879,9 @@ class SelfAttention(nn.Module):
         values = self.value(x)
         
         # scaled dot-product attention
-        scores = torch.bmm(queries, keys.transpose(1, 2)) / self.norm
-        
-        # apply softmax and compute output
-        att_weights = torch.nn.functional.softmax(scores, dim=-1)
-        output = torch.bmm(att_weights, values)
-        
+        output = torch.nn.functional.scaled_dot_product_attention(queries, keys, values)        
         return output
-        
+    
 class GraphAttention(nn.Module):
 
     def __init__(
@@ -913,7 +908,7 @@ class GraphAttention(nn.Module):
         self.edge_emb = nn.Linear(3, hidden_channels_GCN[-1])
 
         # Attention layer
-        attention_dim = hidden_channels_GCN[-1] * 4
+        attention_dim = hidden_channels_GCN[-1] * 3
         self.attention = SelfAttention(attention_dim)
 
         # Output layer
@@ -960,15 +955,11 @@ class GraphAttention(nn.Module):
         emb = self.edge_emb(torch.cat([w, c], dim=-1))
         emb = self.activation(emb)
 
-        # aggregate graph level information to aid edge weight generation
-        x_pool = nng.global_mean_pool(x, batch_labels)
-        inds = batch_labels[edges[0, :]]
-        x_pool = x_pool[inds, :]
-
         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
-        edge_feat = torch.cat([x_src, x_dst, x_pool, emb], dim=-1) 
+        edge_feat = torch.cat([x_src, emb, x_dst], dim=-1) 
         
         # unbatch data and pad sequences
+        inds = batch_labels[edges[0, :]]
         edge_feat = unbatch(edge_feat, inds)
         edge_feat = torch.nn.utils.rnn.pad_sequence(edge_feat, batch_first=True)
 
@@ -998,3 +989,115 @@ class GraphAttention(nn.Module):
         edges = edges[:, ::2, :]
 
         return edges, edge_feat, edge_classes
+        
+# class GraphAttention(nn.Module):
+
+#     def __init__(
+#         self,
+#         hidden_channels_GCN=[32, 64],
+#         n_node_features=5,
+#     ):
+#         super().__init__()
+
+#         # Weight embedding
+#         self.weight_emb_one = nn.Linear(7, 64)
+#         self.weight_emb_two = nn.Linear(64, 1)
+
+#         # GCN layers
+#         channels = [n_node_features] + hidden_channels_GCN
+#         self.graph_layers = nn.ModuleList(
+#             [
+#                 nng.GraphConv(in_channels, out_channels)
+#                 for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
+#             ]
+#         )
+
+#         # Edge embedding
+#         self.edge_emb = nn.Linear(3, hidden_channels_GCN[-1])
+
+#         # Attention layer
+#         attention_dim = hidden_channels_GCN[-1] * 4
+#         self.attention = SelfAttention(attention_dim)
+
+#         # Output layer
+#         self.output_layer = nn.Linear(attention_dim, 1)
+
+#         # Layer to split syndrome into X (Z)-graphs
+#         self.split_syndromes = SplitSyndromes()
+
+#         # Activation function
+#         self.activation = torch.nn.ReLU()
+
+#     def forward(
+#         self,
+#         x,
+#         edges,
+#         edge_attr,
+#         detector_labels,
+#         batch_labels,
+#     ):
+
+#         # weight embedding
+#         w = edge_attr[:, [0]]
+#         c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
+#         src = x[edges[0, :], :2]
+#         dst = x[edges[1, :], :2]
+#         emb = torch.cat([src, w, c, dst], dim=-1)
+
+#         w = self.weight_emb_one(emb)
+#         w = self.activation(w)
+#         w = self.weight_emb_two(w)
+#         w = self.activation(w)
+
+#         # graph layers
+#         for layer in self.graph_layers:
+#             x = layer(x, edges, w)
+#             x = self.activation(x)
+
+#         # split syndromes so only X (Z) nodes remain and create an edge embedding
+#         edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
+
+#         # create an embedding for weights and classes on an edge level
+#         w = edge_attr[:, [0]]
+#         c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
+#         emb = self.edge_emb(torch.cat([w, c], dim=-1))
+#         emb = self.activation(emb)
+
+#         # aggregate graph level information to aid edge weight generation
+#         x_pool = nng.global_mean_pool(x, batch_labels)
+#         inds = batch_labels[edges[0, :]]
+#         x_pool = x_pool[inds, :]
+
+#         x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
+#         edge_feat = torch.cat([x_src, x_dst, x_pool, emb], dim=-1) 
+        
+#         # unbatch data and pad sequences
+#         edge_feat = unbatch(edge_feat, inds)
+#         edge_feat = torch.nn.utils.rnn.pad_sequence(edge_feat, batch_first=True)
+
+#         src_edges = unbatch(edges[0, :], inds)
+#         trg_edges = unbatch(edges[1, :], inds)
+
+#         src_edges = torch.nn.utils.rnn.pad_sequence(src_edges, batch_first=True)
+#         trg_edges = torch.nn.utils.rnn.pad_sequence(trg_edges, batch_first=True)
+#         edges = torch.stack([src_edges, trg_edges], dim=-1)
+
+#         edge_classes = unbatch(edge_attr[:, [1]], inds)
+#         edge_classes = torch.nn.utils.rnn.pad_sequence(edge_classes, batch_first=True)
+
+#         # send the edge features through an attention layer
+#         edge_feat = self.attention(edge_feat)
+        
+#         # output
+#         edge_feat = self.output_layer(edge_feat)
+        
+#         # save the edges with minimum weights (for each duplicate edge)
+#         edge_feat = torch.cat([edge_feat[:, ::2, :], edge_feat[:, 1::2, :]], dim=2)
+#         edge_classes = torch.cat([edge_classes[:, ::2, :], edge_classes[:, 1::2, :]], dim=2)
+        
+#         edge_feat, min_inds = torch.min(edge_feat, dim=2, keepdim=True)
+#         edge_classes = torch.gather(edge_classes, -1, min_inds)
+        
+#         edges = edges[:, ::2, :]
+
+#         return edges, edge_feat, edge_classes
