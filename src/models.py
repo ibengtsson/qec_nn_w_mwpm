@@ -5,6 +5,7 @@ import torch_geometric.nn as nng
 from torch_geometric.utils import sort_edge_index, softmax, one_hot, unbatch, unbatch_edge_index
 import numpy as np
 import warnings
+import math
 
 class SplitSyndromes(nn.Module):
 
@@ -852,34 +853,54 @@ class SimpleGraphNNV6(nn.Module):
         edges = edges[:, ::2]
         
         return edges, edge_feat, edge_classes
-    
-class SelfAttention(nn.Module):
+
+class MultiheadAttention(nn.Module):
     
     def __init__(
         self,
         input_dim,
+        output_dim,
+        num_heads=2,
     ):  
         
         super().__init__()
+        assert output_dim % num_heads == 0, "Output dimension must be divisible by number of heads"
         
-        # normalisation 
-        self.norm = torch.sqrt(torch.tensor(input_dim, dtype=torch.float32))
-        
-        # linear transformation for Q, V, K
-        self.key = nn.Linear(input_dim, input_dim)
-        self.query = nn.Linear(input_dim, input_dim)
-        self.value = nn.Linear(input_dim, input_dim)
+        self.output_dim = output_dim
+        self.num_heads = num_heads
+        self.head_dim = output_dim // num_heads
+    
+        # linear transformation for Q, V, K (stack together for efficiency)
+        self.output_dim = output_dim
+        self.qkv_proj = nn.Linear(input_dim, output_dim * 3)
+        self.out_proj = nn.Linear(output_dim, output_dim)
     
     # assume x: (batch_size, sequence_length, feature_dim)
-    def forward(self, x):
+    def forward(self, x, mask=None):
+        batch_size, seq_length, _ = x.shape
         
         # linear transformations
-        keys = self.key(x)
-        queries = self.query(x)
-        values = self.value(x)
+        qkv = self.qkv_proj(x)
         
-        # scaled dot-product attention
-        output = torch.nn.functional.scaled_dot_product_attention(queries, keys, values)        
+        # extract q, k and v
+        qkv = qkv.reshape(batch_size, seq_length, self.num_heads, 3 * self.head_dim)
+        qkv = qkv.permute(0, 2, 1, 3)
+        queries, keys, values = qkv.chunk(3, dim=-1)
+        
+        # scaled self-attention
+        d_k = queries.shape[-1]
+        attn_logits = torch.matmul(queries, keys.transpose(-2, -1))
+        attn_logits = attn_logits / math.sqrt(d_k)
+        
+        if mask is not None:
+            attn_logits = attn_logits.masked_fill(mask.view(batch_size, 1, 1, seq_length), -9e15)
+        attention = torch.nn.functional.softmax(attn_logits, dim=-1)
+        
+        values = torch.matmul(attention, values)
+        values = values.permute(0, 2, 1, 3)
+        values = values.reshape(batch_size, seq_length, self.output_dim)
+        output = self.out_proj(values)
+        
         return output
     
 class GraphAttention(nn.Module):
@@ -909,7 +930,7 @@ class GraphAttention(nn.Module):
 
         # Attention layer
         attention_dim = hidden_channels_GCN[-1] * 3
-        self.attention = SelfAttention(attention_dim)
+        self.attention = MultiheadAttention(attention_dim, attention_dim)
 
         # Output layer
         self.output_layer = nn.Linear(attention_dim, 1)
@@ -972,9 +993,12 @@ class GraphAttention(nn.Module):
 
         edge_classes = unbatch(edge_attr[:, [1]], inds)
         edge_classes = torch.nn.utils.rnn.pad_sequence(edge_classes, batch_first=True)
+        
+        # create mask ensuring attention is not applied for the padding
+        mask = (edges[:, :, 0] == edges[:, :, 1])
 
         # send the edge features through an attention layer
-        edge_feat = self.attention(edge_feat)
+        edge_feat = self.attention(edge_feat, mask=mask)
         
         # output
         edge_feat = self.output_layer(edge_feat)
