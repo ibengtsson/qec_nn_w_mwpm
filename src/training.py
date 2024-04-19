@@ -12,7 +12,7 @@ import copy
 from src.utils import parse_yaml, inference, predict_mwpm, predict_mwpm_nested
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import GraphNN, GraphAttention, GraphNNV2, SimpleGraphNNV6, GraphAttention
+from src.models import GraphNN, GraphAttention, GraphNNV2, SimpleGraphNNV5, GraphAttention
 from src.losses import MWPMLoss, MWPMLoss_v2, MWPMLoss_v3, NestedMWPMLoss, MWPMLoss_v4
 
 
@@ -72,7 +72,7 @@ class ModelTrainer:
         ):
             torch.cuda.set_device(self.device)
 
-        self.model = GraphAttention(
+        self.model = SimpleGraphNNV5(
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],
             hidden_channels_MLP=model_settings["hidden_channels_MLP"],
         ).to(self.device)
@@ -276,6 +276,7 @@ class ModelTrainer:
             n_graphs=n_val_graphs,
         )
 
+        hard_syndromes, hard_flips = None, None
         for epoch in range(current_epoch, n_epochs):
             self.model.train()
             
@@ -296,6 +297,11 @@ class ModelTrainer:
                 syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True, seed=seed)
                 epoch_n_trivial += n_trivial
                 
+                # add syndromes we couldnt classify previously to the batch, up to an additional third
+                if hard_syndromes is not None:
+                    syndromes = np.concatenate([syndromes, hard_syndromes[:syndromes.shape[0] // 3]])
+                    flips = np.concatenate([flips, hard_flips[:syndromes.shape[0] // 3]])
+                
                 x, edge_index, edge_attr, batch_labels, detector_labels = (
                     get_batch_of_graphs(
                         syndromes,
@@ -315,7 +321,7 @@ class ModelTrainer:
                     detector_labels,
                     batch_labels,
                 )
-                loss = loss_fun(
+                loss, wrong_inds = loss_fun(
                     edge_index,
                     edge_weights,
                     edge_classes,
@@ -326,6 +332,19 @@ class ModelTrainer:
                 self.optimizer.step()
                 train_loss += loss.item() * n_graphs
                 epoch_n_graphs += n_graphs
+                
+                # add to buffer of syndromes that network did not classify correctly
+                hard_syndromes = (np.concatenate([hard_syndromes, syndromes[wrong_inds, ...]]) if (hard_syndromes is not None) else syndromes[wrong_inds, ...])
+                hard_flips = (np.concatenate([hard_flips, flips[wrong_inds]]) if (hard_flips is not None) else flips[wrong_inds])
+                
+            # shuffle and make sure buffer doesnt grow too large
+            shuffle_inds = np.arange(hard_syndromes.shape[0])
+            np.random.shuffle(shuffle_inds)
+            hard_syndromes = hard_syndromes[shuffle_inds, ...]
+            hard_syndromes = hard_syndromes[:batch_size * 4, ...]
+            
+            hard_flips = hard_flips[shuffle_inds]
+            hard_flips = hard_flips[:batch_size * 4]
 
             # compute losses and logical accuracy
             # ------------------------------------
