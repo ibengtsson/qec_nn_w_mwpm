@@ -276,6 +276,7 @@ class ModelTrainer:
             n_graphs=n_val_graphs,
         )
 
+        hard_syndromes, hard_flips = None, None
         for epoch in range(current_epoch, n_epochs):
             self.model.train()
             
@@ -285,16 +286,22 @@ class ModelTrainer:
             else:
                 seed = None
             
-            n = 8
+            n = 20
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
+            
             for _ in range(n_batches):
                 
                 # simulate data as we go
                 sim = random.choice(sims)
                 syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True, seed=seed)
                 epoch_n_trivial += n_trivial
+
+                # add syndromes we couldnt classify previously to the batch, up to an additional third
+                if hard_syndromes is not None:
+                    syndromes = np.concatenate([syndromes, hard_syndromes[:syndromes.shape[0] // 3]])
+                    flips = np.concatenate([flips, hard_flips[:syndromes.shape[0] // 3]])
                 
                 # count nodes per graphs and add 1 where we need to add virtual nodes
                 n_nodes_p_graph = (np.count_nonzero(syndromes, axis=(1, 2, 3)) + 
@@ -332,7 +339,7 @@ class ModelTrainer:
                         detector_labels,
                         batch_labels,
                     )
-                    loss = loss_fun(
+                    loss, wrong_inds = loss_fun(
                         edge_index,
                         edge_weights,
                         edge_classes,
@@ -343,6 +350,19 @@ class ModelTrainer:
                     train_loss += loss.item() * n_graphs
                     epoch_n_graphs += n_graphs
 
+                    # add to buffer of syndromes that network did not classify correctly
+                    hard_syndromes = (np.concatenate([hard_syndromes, s[wrong_inds, ...]]) if (hard_syndromes is not None) else s[wrong_inds, ...])
+                    hard_flips = (np.concatenate([hard_flips, f[wrong_inds]]) if (hard_flips is not None) else f[wrong_inds])
+                
+                # shuffle and make sure buffer doesnt grow too large
+                shuffle_inds = np.arange(hard_syndromes.shape[0])
+                np.random.shuffle(shuffle_inds)
+                hard_syndromes = hard_syndromes[shuffle_inds, ...]
+                hard_syndromes = hard_syndromes[:batch_size * 4, ...]
+                
+                hard_flips = hard_flips[shuffle_inds]
+                hard_flips = hard_flips[:batch_size * 4]
+                
             # compute losses and logical accuracy
             # ------------------------------------
 
