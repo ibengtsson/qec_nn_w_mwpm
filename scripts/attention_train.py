@@ -8,7 +8,7 @@ if "alvis" in os.uname().nodename:
     os.environ["QECSIM_CFG"] = "/cephyr/users/isakbe/Alvis"
     SEED = False
 else:
-    SEED = False
+    SEED = True
 
 def main():
     
