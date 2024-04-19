@@ -395,7 +395,8 @@ class MWPMLoss_v4(torch.autograd.Function):
         class_weight = {0: identity_w, 1: flip_w}
 
         preds = []
-        for edges, weights, classes, edge_map, label in zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels):
+        wrong_inds = []
+        for i, (edges, weights, classes, edge_map, label) in enumerate(zip(edges_p_graph, weights_p_graph, classes_p_graph, edge_map_p_graph, labels)):
             
             edges = edges.cpu().numpy()
             weights = weights.cpu().numpy()
@@ -413,6 +414,7 @@ class MWPMLoss_v4(torch.autograd.Function):
             else:
                 _desired_weights[match_mask] = 1
                 _desired_weights[~match_mask] = 0
+                wrong_inds.append(i)
             
             _bias_reversal[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
             _bias_reversal[match_mask] = edges.shape[1] / np.maximum(match_mask.sum(), 1)
@@ -432,12 +434,13 @@ class MWPMLoss_v4(torch.autograd.Function):
 
         ctx.save_for_backward(edge_weights, desired_weights, bias_reversal)
         
-        return loss
+        return loss, wrong_inds
 
     @staticmethod
     def backward(
         ctx,
         grad_output,
+        _0,
     ):
         edge_weights, desired_edge_weights, bias_reversal = ctx.saved_tensors
         grad = (edge_weights - desired_edge_weights) * bias_reversal
@@ -554,6 +557,7 @@ class AttentionMWPMLoss(torch.autograd.Function):
         class_weight = {0: identity_w, 1: flip_w}
 
         loss = 0
+        wrong_inds = []
         for i, (edges, weights, classes, label) in enumerate(zip(edge_indx, edge_weights, edge_classes, labels)):
             
             # begin by removing the trailing zeros from the padding
@@ -578,6 +582,9 @@ class AttentionMWPMLoss(torch.autograd.Function):
             else:
                 desired_weights[match_mask] = 1
                 desired_weights[~match_mask] = 0
+                
+                # save indices to wrong predictions
+                wrong_inds.append(i)
             
             
             matching_componesation[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
@@ -599,12 +606,13 @@ class AttentionMWPMLoss(torch.autograd.Function):
         
         ctx.save_for_backward(grads)
         
-        return loss
+        return loss, wrong_inds
 
     @staticmethod
     def backward(
         ctx,
         grad_output,
+        _0,
     ):
         grads, = ctx.saved_tensors
-        return None, grads, None, None
+        return None, grads*grad_output, None, None
