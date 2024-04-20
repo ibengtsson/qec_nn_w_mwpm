@@ -166,21 +166,30 @@ def attention_inference(
     flips: np.ndarray,
     experiment: str = "z",
     m_nearest_nodes: int = 10,
+    n: int = 8,
     device: torch.device = torch.device("cpu"),
 ):
     # set model in inference mode
     model.eval()
-    x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
-        syndromes, m_nearest_nodes, experiment=experiment, device=device
-    )
-    edge_index, edge_weights, edge_classes = model(
-        x, edge_index, edge_attr, detector_labels, batch_labels,
-    )
     
-    edge_weights = torch.nn.functional.sigmoid(edge_weights)
-    preds = predict_mwpm_attention(edge_index, edge_weights, edge_classes)
+    # run chunks
+    stabilizer_label = {"z": 3, "x": 1}
+    syndrome_chunks, flip_chunks = split_syndromes_equisize(syndromes, flips, n, stabilizer_label[experiment])
+    
+    n_correct = 0
+    for s, f in zip(syndrome_chunks, flip_chunks):
+    
+        x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
+            s, m_nearest_nodes, experiment=experiment, device=device
+        )
+        edge_index, edge_weights, edge_classes = model(
+            x, edge_index, edge_attr, detector_labels, batch_labels,
+        )
+        
+        edge_weights = torch.nn.functional.sigmoid(edge_weights)
+        preds = predict_mwpm_attention(edge_index, edge_weights, edge_classes)
 
-    n_correct = (preds == flips).sum()
+        n_correct += (preds == f).sum()
 
     return n_correct
 
