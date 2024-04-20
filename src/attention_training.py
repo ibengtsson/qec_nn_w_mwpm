@@ -9,7 +9,7 @@ import random
 import pandas as pd
 import copy
 
-from src.utils import parse_yaml, attention_inference, predict_mwpm_attention
+from src.utils import parse_yaml, attention_inference, predict_mwpm_attention, split_syndromes_equisize
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
 from src.models import GraphAttention
@@ -286,7 +286,7 @@ class ModelTrainer:
             else:
                 seed = None
             
-            n = 20
+            n = 8
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
@@ -301,22 +301,11 @@ class ModelTrainer:
                 if hard_syndromes is not None:
                     # n_additional = syndromes.shape[0] // 3
                     n_additional = 0
-                    syndromes = np.concatenate([syndromes, hard_syndromes[:n_additional]])
+                    syndromes = np.concatenate([syndromes, hard_syndromes[:n_additional, ...]])
                     flips = np.concatenate([flips, hard_flips[:n_additional]])
-                
-                # count nodes per graphs and add 1 where we need to add virtual nodes
-                n_nodes_p_graph = (np.count_nonzero(syndromes, axis=(1, 2, 3)) + 
-                                    (np.count_nonzero(syndromes == stabilizer_label[experiment], axis=(1, 2, 3)) & 1))
-
-                sort_args = np.argsort(n_nodes_p_graph)
                     
-                # sort syndromes and flips
-                syndromes = syndromes[sort_args, ...]
-                flips = flips[sort_args]
-                
-                # split into chunks having graphs of similar number of nodes
-                syndrome_chunks = np.array_split(syndromes, n)
-                flip_chunks = np.array_split(flips, n)
+                # split into chunks having graphs of similar number of nodes whilst ensuring an overall tensor of similar size
+                syndrome_chunks, flip_chunks = split_syndromes_equisize(syndromes, flips, n, stabilizer_label[experiment])
                 
                 # we run an inner loop to try and batch graphs having a similar number of nodes together
                 for s, f in zip(syndrome_chunks, flip_chunks):
