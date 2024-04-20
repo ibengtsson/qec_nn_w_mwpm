@@ -1,5 +1,6 @@
 import datetime
 import yaml
+import heapq
 import torch
 import torch.nn as nn
 import numpy as np
@@ -372,4 +373,36 @@ def mwpm_w_grad_v2(edges, weights, classes):
 
     return flip, mask
 
-
+def split_syndromes_equisize(syndromes, flips, n, exp_label=3):
+    
+    # count nodes per graphs and add 1 where we need to add virtual nodes
+    n_nodes_p_graph = np.count_nonzero(syndromes, axis=(1, 2, 3))
+    odd_n_nodes = np.count_nonzero(syndromes == exp_label, axis=(1, 2, 3)) & 1
+    n_nodes_p_graph += odd_n_nodes
+    
+    # sort everything to make sure graphs of similar size belongs to same chunk
+    sort_args = np.argsort(n_nodes_p_graph)
+    syndromes = syndromes[sort_args, ...]
+    flips = flips[sort_args]
+    n_nodes_p_graph = n_nodes_p_graph[sort_args]
+    
+    # cumulative sum
+    cum_sum = n_nodes_p_graph.cumsum()
+    
+    # approximate sum to aim for
+    partsum = cum_sum[-1] // n
+    
+    # generates the cumulative sums of each part
+    cumpartsums = np.array(range(1, n))*partsum
+    
+    # finds the indices where the cumulative sums are sandwiched
+    inds = np.searchsorted(cum_sum, cumpartsums) 
+    
+    # split
+    syndrome_chunks = np.split(syndromes, inds)
+    flip_chunks = np.split(flips, inds)
+    
+    return syndrome_chunks, flip_chunks
+    
+    
+    
