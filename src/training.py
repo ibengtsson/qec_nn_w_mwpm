@@ -299,7 +299,7 @@ class ModelTrainer:
                 
                 # add syndromes we couldnt classify previously to the batch, up to an additional third
                 if hard_syndromes is not None:
-                    syndromes = np.concatenate([syndromes, hard_syndromes[:syndromes.shape[0] // 3]])
+                    syndromes = np.concatenate([syndromes, hard_syndromes[:syndromes.shape[0] // 3, ...]])
                     flips = np.concatenate([flips, hard_flips[:syndromes.shape[0] // 3]])
                 
                 x, edge_index, edge_attr, batch_labels, detector_labels = (
