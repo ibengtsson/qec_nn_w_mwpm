@@ -290,7 +290,6 @@ class ModelTrainer:
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
-            
             for _ in range(n_batches):
                 
                 # simulate data as we go
@@ -298,10 +297,12 @@ class ModelTrainer:
                 syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True, seed=seed)
                 epoch_n_trivial += n_trivial
 
-                # add syndromes we couldnt classify previously to the batch, up to an additional third
+                # add syndromes we couldnt classify previously to the batch
                 if hard_syndromes is not None:
-                    syndromes = np.concatenate([syndromes, hard_syndromes[:syndromes.shape[0] // 3]])
-                    flips = np.concatenate([flips, hard_flips[:syndromes.shape[0] // 3]])
+                    # n_additional = syndromes.shape[0] // 3
+                    n_additional = 0
+                    syndromes = np.concatenate([syndromes, hard_syndromes[:n_additional]])
+                    flips = np.concatenate([flips, hard_flips[:n_additional]])
                 
                 # count nodes per graphs and add 1 where we need to add virtual nodes
                 n_nodes_p_graph = (np.count_nonzero(syndromes, axis=(1, 2, 3)) + 

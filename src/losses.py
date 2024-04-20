@@ -615,4 +615,4 @@ class AttentionMWPMLoss(torch.autograd.Function):
         _0,
     ):
         grads, = ctx.saved_tensors
-        return None, grads*grad_output, None, None
+        return None, grads, None, None

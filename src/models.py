@@ -854,54 +854,34 @@ class SimpleGraphNNV6(nn.Module):
         
         return edges, edge_feat, edge_classes
 
-class MultiheadAttention(nn.Module):
+class SelfAttention(nn.Module):
     
     def __init__(
         self,
-        input_dim,
-        output_dim,
-        num_heads=2,
+        embd_dim,
+        num_heads=1,
     ):  
         
         super().__init__()
-        assert output_dim % num_heads == 0, "Output dimension must be divisible by number of heads"
-        
-        self.output_dim = output_dim
-        self.num_heads = num_heads
-        self.head_dim = output_dim // num_heads
-    
+        assert embd_dim % num_heads == 0, "Embedding dimension must be divisible by number of heads"
+
         # linear transformation for Q, V, K (stack together for efficiency)
-        self.output_dim = output_dim
-        self.qkv_proj = nn.Linear(input_dim, output_dim * 3)
-        self.out_proj = nn.Linear(output_dim, output_dim)
-    
+        self.qkv_proj = nn.Linear(embd_dim, embd_dim * 3)
+        self.mh = nn.MultiheadAttention(embd_dim, num_heads=num_heads, batch_first=True)
+        
     # assume x: (batch_size, sequence_length, feature_dim)
     def forward(self, x, mask=None):
-        batch_size, seq_length, _ = x.shape
-        
+
         # linear transformations
         qkv = self.qkv_proj(x)
         
         # extract q, k and v
-        qkv = qkv.reshape(batch_size, seq_length, self.num_heads, 3 * self.head_dim)
-        qkv = qkv.permute(0, 2, 1, 3)
-        queries, keys, values = qkv.chunk(3, dim=-1)
+        q, k, v = qkv.chunk(3, dim=-1)
+
+        # run attention
+        attn_out, _ = self.mh(q, k, v, key_padding_mask=mask, need_weights=False)
         
-        # scaled self-attention
-        d_k = queries.shape[-1]
-        attn_logits = torch.matmul(queries, keys.transpose(-2, -1))
-        attn_logits = attn_logits / math.sqrt(d_k)
-        
-        if mask is not None:
-            attn_logits = attn_logits.masked_fill(mask.view(batch_size, 1, 1, seq_length), -9e15)
-        attention = torch.nn.functional.softmax(attn_logits, dim=-1)
-        
-        values = torch.matmul(attention, values)
-        values = values.permute(0, 2, 1, 3)
-        values = values.reshape(batch_size, seq_length, self.output_dim)
-        output = self.out_proj(values)
-        
-        return output
+        return attn_out
     
 class GraphAttention(nn.Module):
 
@@ -930,7 +910,7 @@ class GraphAttention(nn.Module):
 
         # Attention layer
         attention_dim = hidden_channels_GCN[-1] * 3
-        self.attention = MultiheadAttention(attention_dim, attention_dim)
+        self.attention = SelfAttention(attention_dim)
 
         # Output layer
         self.output_layer = nn.Linear(attention_dim, 1)
@@ -1125,3 +1105,61 @@ class GraphAttention(nn.Module):
 #         edges = edges[:, ::2, :]
 
 #         return edges, edge_feat, edge_classes
+
+# class MultiheadAttention(nn.Module):
+    
+#     def __init__(
+#         self,
+#         input_dim,
+#         output_dim,
+#         num_heads=1,
+#     ):  
+        
+#         super().__init__()
+#         assert output_dim % num_heads == 0, "Output dimension must be divisible by number of heads"
+        
+#         self.output_dim = output_dim
+#         self.num_heads = num_heads
+#         self.head_dim = output_dim // num_heads
+    
+#         # linear transformation for Q, V, K (stack together for efficiency)
+#         self.output_dim = output_dim
+#         self.qkv_proj = nn.Linear(input_dim, output_dim * 3)
+#         self.mh = nn.MultiheadAttention(output_dim, num_heads=num_heads, batch_first=True)
+#         self.out_proj = nn.Linear(output_dim, output_dim)
+    
+#     # assume x: (batch_size, sequence_length, feature_dim)
+#     def forward(self, x, mask=None):
+#         batch_size, seq_length, _ = x.shape
+        
+#         # linear transformations
+#         qkv = self.qkv_proj(x)
+        
+#         # extract q, k and v
+        
+        
+        
+#         qkv = qkv.reshape(batch_size, seq_length, self.num_heads, 3 * self.head_dim)
+#         qkv = qkv.permute(0, 2, 1, 3)
+#         queries, keys, values = qkv.chunk(3, dim=-1)
+        
+#         # scaled self-attention
+#         d_k = queries.shape[-1]
+#         attn_logits = torch.matmul(queries, keys.transpose(-2, -1))
+#         attn_logits = attn_logits / math.sqrt(d_k)
+        
+#         print(x.shape)
+#         print(queries.shape, keys.shape)
+#         print(attn_logits.shape)
+#         if mask is not None:
+#             print(mask.view(batch_size, 1, 1, seq_length).shape)
+#             print(mask.view(batch_size, 1, 1, seq_length)[0, 0, 0, :])
+#             attn_logits = attn_logits.masked_fill(mask.view(batch_size, 1, 1, seq_length), -9e15)
+#         attention = torch.nn.functional.softmax(attn_logits, dim=-1)
+        
+#         values = torch.matmul(attention, values)
+#         values = values.permute(0, 2, 1, 3)
+#         values = values.reshape(batch_size, seq_length, self.output_dim)
+#         output = self.out_proj(values)
+        
+#         return output
