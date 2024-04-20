@@ -4,7 +4,7 @@
 #SBATCH -J mwpm_nn_training
 #SBATCH -o ../job_outputs/mwpm_nn_training_%j.out
 #SBATCH --cpus-per-task=1
-#SBATCH --gpus-per-node=A40:1
+#SBATCH --gpus-per-node=A100:1
 
 # purge modules
 module purge
