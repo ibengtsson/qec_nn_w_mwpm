@@ -3,8 +3,8 @@ paths:
   saved_model_path: ../training_outputs/d5_d_t_5_240417-104047_load_f_d5_d_t_5_240414-212528.pt
 model_settings:
   hidden_channels_GCN:
-    - 512
-    - 512
+    - 256
+    - 256
   hidden_channels_MLP:
     - 256
     - 256
@@ -21,12 +21,12 @@ graph_settings:
 training_settings:
   seed: Null
   dataset_size: 1000000
-  validation_set_size: 100000
-  batch_size: 40000
-  tot_epochs: 3000
-  lr: 0.00001
+  validation_set_size: 30000
+  batch_size: 60000
+  tot_epochs: 1000
+  lr: 0.0001
   device: cuda
-  resume_training: True
-  current_epoch: 2500
-  comment: "Testing training where syndromes that couldnt be classified are re-submit and used for training again.."
+  resume_training: False
+  current_epoch: 0
+  comment: "Attention - scaling loss w accuracy. Add an activation function more."
 

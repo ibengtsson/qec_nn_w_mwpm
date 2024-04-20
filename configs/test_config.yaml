@@ -9,8 +9,8 @@ model_settings:
     - 64
 graph_settings:
   experiment: "z"
-  code_size: 9
-  repetitions: 9
+  code_size: 5
+  repetitions: 5
   min_error_rate: 0.001
   max_error_rate: 0.005
   m_nearest_nodes: 5
