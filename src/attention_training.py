@@ -276,23 +276,26 @@ class ModelTrainer:
             n_graphs=n_val_graphs,
         )
 
+        
+        # initialise potential seed
+        if self.simul_seed:
+            seed = self.simul_seed + current_epoch + int(1e8)
+        else:
+            seed = None
+            
         hard_syndromes, hard_flips = None, None
         for epoch in range(current_epoch, n_epochs):
             self.model.train()
-            
-            # set potential seed
-            if self.simul_seed:
-                seed = self.simul_seed + epoch + int(1e8)
-            else:
-                seed = None
             
             n = 8
             train_loss = 0
             epoch_n_graphs = 0
             epoch_n_trivial = 0
-            for _ in range(n_batches):
+            for i in range(n_batches):
                 
                 # simulate data as we go
+                if self.simul_seed:
+                    seed += epoch + i
                 sim = random.choice(sims)
                 syndromes, flips, n_trivial = sim.generate_syndromes(use_for_mwpm=True, seed=seed)
                 epoch_n_trivial += n_trivial
