@@ -12,7 +12,7 @@ import copy
 from src.utils import parse_yaml, attention_inference, predict_mwpm_attention, split_syndromes_equisize
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
-from src.models import GraphAttention
+from src.models import GraphAttentionV2
 from src.losses import AttentionMWPMLossV2
 
 
@@ -72,7 +72,7 @@ class ModelTrainer:
         ):
             torch.cuda.set_device(self.device)
 
-        self.model = GraphAttention(
+        self.model = GraphAttentionV2(
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],
         ).to(self.device)
         
