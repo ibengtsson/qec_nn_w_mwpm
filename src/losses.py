@@ -546,7 +546,7 @@ class AttentionMWPMLoss(torch.autograd.Function):
     ):
 
         # send weights through a sigmoid
-        edge_weights = torch.nn.functional.sigmoid(edge_weights)
+        edge_weights = torch.nn.functional.sigmoid(edge_weights) 
         
         # initialise gradients
         grads = torch.zeros_like(edge_weights, device="cpu")
@@ -603,6 +603,86 @@ class AttentionMWPMLoss(torch.autograd.Function):
         loss = loss.to(edge_weights.device)
         
         loss /= edge_indx.shape[0]
+        
+        ctx.save_for_backward(grads)
+        
+        return loss, wrong_inds
+
+    @staticmethod
+    def backward(
+        ctx,
+        grad_output,
+        _0,
+    ):
+        grads, = ctx.saved_tensors
+        return None, grads, None, None
+    
+class AttentionMWPMLossV2(torch.autograd.Function):
+
+    # experiment will be a 1-d array of same length as syndromes, indicating whether its a memory x or memory z-exp
+    @staticmethod
+    def forward(
+        ctx,
+        edge_indx: torch.Tensor,
+        edge_weights: torch.Tensor,
+        edge_classes: torch.Tensor,
+        labels: np.ndarray,
+    ):
+        
+        # initialise gradients
+        grads = torch.zeros_like(edge_weights, device="cpu")
+        
+        # class weighting
+        identity_w = (1 / (labels == 0).sum()) * (labels.shape[0] / 2.0)
+        flip_w = (1 / (labels == 1).sum()) * (labels.shape[0] / 2.0)
+        class_weight = {0: identity_w, 1: flip_w}
+
+        loss = 0
+        wrong_inds = []
+        edge_limits = [0, 1e3]
+        for i, (edges, weights, classes, label) in enumerate(zip(edge_indx, edge_weights, edge_classes, labels)):
+            
+            # begin by removing the trailing zeros from the padding
+            mask = edges[:, 0] != edges[:, 1]
+            edges = edges[mask, :].T
+
+            weights = weights[mask]
+            classes = classes[mask]
+
+            edges = edges.cpu().numpy()
+            _weights = weights.cpu().numpy().squeeze()
+            classes = classes.cpu().numpy().squeeze()
+    
+            prediction, match_mask = mwpm_w_grad_v2(edges, _weights, classes)
+            desired_weights = torch.zeros(weights.shape)
+            matching_componesation = torch.zeros(weights.shape)
+            
+            if prediction == label:
+                desired_weights[~match_mask] = edge_limits[1]
+                desired_weights[match_mask] = edge_limits[0]
+                
+            else:
+                desired_weights[match_mask] = edge_limits[1]
+                desired_weights[~match_mask] = edge_limits[0]
+                
+                # save indices to wrong predictions
+                wrong_inds.append(i)
+            
+            
+            matching_componesation[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
+            matching_componesation[match_mask] = edges.shape[1] / np.maximum(match_mask.sum(), 1)
+            
+            # loss
+            loss += ((desired_weights - weights) ** 2 / weights.shape[0]).sum()
+            
+            # gradients
+            grads[i, mask] = (weights - desired_weights) * matching_componesation * class_weight[label]
+   
+        # move gradients and loss to GPU
+        grads = grads.to(edge_weights.device)
+        loss = loss.to(edge_weights.device)
+
+        loss /= edge_indx.shape[0] * edge_indx.shape[1]
         
         ctx.save_for_backward(grads)
         
