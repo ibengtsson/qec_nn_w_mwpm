@@ -15,6 +15,7 @@ import sys
 import logging
 logging.disable(sys.maxsize)
 from torch_geometric.utils import to_dense_adj
+import random
 
 def time_it(func, reps, *args):
     start_t = datetime.datetime.now()
@@ -89,7 +90,7 @@ def inference(
     nested_tensors: bool = False,
 ):
     # set model in inference mode
-    model.eval()
+    # model.eval()
     x, edge_index, edge_attr, batch_labels, detector_labels = get_batch_of_graphs(
         syndromes, m_nearest_nodes, experiment=experiment, device=device
     )
@@ -106,25 +107,18 @@ def inference(
     else:
         preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
 
-    n_correct = (preds == flips).sum()
-    odd_or_even_errors = odd_nodes[~(preds == flips)]
-    print(odd_or_even_errors.sum() / odd_or_even_errors.shape[0])
-    print(odd_nodes.sum() / odd_nodes.shape[0])
+    correct_or_not = (preds == flips)
+    wrong_syndromes = syndromes[~correct_or_not, ...]
+    wrong_flips = flips[~correct_or_not]
+    inds = random.sample(range(wrong_syndromes.shape[0]), 4)
+    samples = wrong_syndromes[inds, ...]
+    sample_flips = wrong_flips[inds]
+    for s, f in zip(samples, sample_flips):
+        plot_syndrome(s, f)
     
-    # # confusion plot
-    # true_identity = ((preds == 0) & (flips == 0)).sum() / (flips == 0).sum() * 100
-    # true_flip = ((preds == 1) & (flips == 1)).sum() / (flips == 1).sum() * 100
-    # false_identity = ((preds == 0) & (flips == 1)).sum() / (flips == 1).sum() * 100
-    # false_flip = ((preds == 1) & (flips == 0)).sum() / (flips == 0).sum() * 100
-
-    # confusion_data = [[true_identity, false_identity], [false_flip, true_flip]]
-    # df_confusion = pd.DataFrame(
-    #     confusion_data,
-    #     index=["Predicted 0 (%)", "Predicted 1 (%)"],
-    #     columns=["True 0", "True 1"],
-    # )
-    # pd.set_option("display.precision", 2)
-    # print(df_confusion)
+    
+    n_correct = (preds == flips).sum()
+    
     return n_correct
 
 def inference_TEST(
@@ -194,7 +188,7 @@ def attention_inference(
             x, edge_index, edge_attr, detector_labels, batch_labels,
         )
         
-        edge_weights = torch.nn.functional.sigmoid(edge_weights)
+        # edge_weights = torch.nn.functional.sigmoid(edge_weights) * 100
         preds = predict_mwpm_attention(edge_index, edge_weights, edge_classes)
 
         n_correct += (preds == f).sum()
@@ -442,3 +436,4 @@ def plot_syndrome(syndrome, flip):
     
     flip_dict = {0: "No flip", 1: "Flip"}
     fig.suptitle(flip_dict[flip])
+    plt.show()
