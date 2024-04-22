@@ -1,9 +1,11 @@
 import datetime
 import yaml
-import heapq
 import torch
 import torch.nn as nn
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import seaborn as sns
 from qecsim.graphtools import mwpm
 from src.graph import get_batch_of_graphs, extract_edges
 import torch.multiprocessing as mp
@@ -95,6 +97,9 @@ def inference(
         x, edge_index, edge_attr, detector_labels, batch_labels,
     )
 
+    # added virtual nodes
+    odd_nodes = np.count_nonzero(syndromes == 3, axis=(1, 2, 3)) & 1
+    
     edge_weights = torch.nn.functional.sigmoid(edge_weights)
     if nested_tensors:
         preds = predict_mwpm_nested(edge_index, edge_weights, edge_classes)
@@ -102,6 +107,9 @@ def inference(
         preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
 
     n_correct = (preds == flips).sum()
+    odd_or_even_errors = odd_nodes[~(preds == flips)]
+    print(odd_or_even_errors.sum() / odd_or_even_errors.shape[0])
+    print(odd_nodes.sum() / odd_nodes.shape[0])
     
     # # confusion plot
     # true_identity = ((preds == 0) & (flips == 0)).sum() / (flips == 0).sum() * 100
@@ -413,5 +421,24 @@ def split_syndromes_equisize(syndromes, flips, n, exp_label=3):
     
     return syndrome_chunks, flip_chunks
     
+def plot_syndrome(syndrome, flip):
+    sz, _, reps = syndrome.shape
+    n = (reps // 2) + (reps % 2)
     
+    fig, axes = plt.subplots(nrows=n , ncols=2, figsize=(6, n*3))
+    colors = sns.color_palette(palette="Set2", n_colors=3)
+    colors = ["white", "lawngreen", "royalblue"]
+    cbar_ticks = [0.5, 1.5, 2.5]
+    cbar_tick_labels = mticker.FixedFormatter(["Identity", "X", "Z"])
+    for i, ax in enumerate(axes.flatten()):
+        
+        sns.heatmap(syndrome[:, :, i], vmin=0, vmax=3, cmap=colors, square=True, ax=ax, cbar_kws={"ticks": cbar_ticks, "format": cbar_tick_labels})
+        # ax.invert_yaxis()
+        ax.hlines(range(1, sz), xmin=0, xmax=sz, color="k")
+        ax.vlines(range(1, sz), ymin=0, ymax=sz, color="k")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(f"t = {i}")
     
+    flip_dict = {0: "No flip", 1: "Flip"}
+    fig.suptitle(flip_dict[flip])
