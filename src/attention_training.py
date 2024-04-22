@@ -13,7 +13,7 @@ from src.utils import parse_yaml, attention_inference, predict_mwpm_attention, s
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
 from src.models import GraphAttention
-from src.losses import AttentionMWPMLoss
+from src.losses import AttentionMWPMLossV2
 
 
 class ModelTrainer:
@@ -259,7 +259,7 @@ class ModelTrainer:
         n_batches = dataset_size // batch_size
         
         # set loss function
-        loss_fun = AttentionMWPMLoss.apply
+        loss_fun = AttentionMWPMLossV2.apply
         
         # initialise simulations and graph settings
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
