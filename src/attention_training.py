@@ -311,6 +311,7 @@ class ModelTrainer:
                 syndrome_chunks, flip_chunks = split_syndromes_equisize(syndromes, flips, n, stabilizer_label[experiment])
                 
                 # we run an inner loop to try and batch graphs having a similar number of nodes together
+                self.optimizer.zero_grad()
                 for s, f in zip(syndrome_chunks, flip_chunks):
                     
                     x, edge_index, edge_attr, batch_labels, detector_labels = (
@@ -324,7 +325,6 @@ class ModelTrainer:
                     )
 
                     n_graphs = s.shape[0]
-                    self.optimizer.zero_grad()
                     edge_index, edge_weights, edge_classes = self.model(
                         x,
                         edge_index,
@@ -339,7 +339,6 @@ class ModelTrainer:
                         f,
                     )
                     loss.backward()
-                    self.optimizer.step()
                     train_loss += loss.item() * n_graphs
                     epoch_n_graphs += n_graphs
 
@@ -355,6 +354,9 @@ class ModelTrainer:
                 
                 hard_flips = hard_flips[shuffle_inds]
                 hard_flips = hard_flips[:batch_size * 4]
+                
+                # we only update weights after having completed the entire batch, to get fair average
+                self.optimizer.step()
                 
             # compute losses and logical accuracy
             # ------------------------------------
