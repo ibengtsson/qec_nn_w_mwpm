@@ -3,9 +3,9 @@ import yaml
 import torch
 import torch.nn as nn
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-import seaborn as sns
+#import matplotlib.pyplot as plt
+#import matplotlib.ticker as mticker
+#import seaborn as sns
 from qecsim.graphtools import mwpm
 from src.graph import get_batch_of_graphs, extract_edges
 import torch.multiprocessing as mp
@@ -98,8 +98,7 @@ def inference(
         x, edge_index, edge_attr, detector_labels, batch_labels,
     )
 
-    # added virtual nodes
-    # odd_nodes = np.count_nonzero(syndromes == 3, axis=(1, 2, 3)) & 1
+>>>>>>> 0300dcb (fix plot errors on Alvis)
     
     edge_weights = torch.nn.functional.sigmoid(edge_weights)
     if nested_tensors:
@@ -107,14 +106,15 @@ def inference(
     else:
         preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
 
-    # correct_or_not = (preds == flips)
-    # wrong_syndromes = syndromes[~correct_or_not, ...]
-    # wrong_flips = flips[~correct_or_not]
-    # inds = random.sample(range(wrong_syndromes.shape[0]), 4)
-    # samples = wrong_syndromes[inds, ...]
-    # sample_flips = wrong_flips[inds]
-    # for s, f in zip(samples, sample_flips):
-    #     plot_syndrome(s, f)
+    #correct_or_not = (preds == flips)
+    #wrong_syndromes = syndromes[~correct_or_not, ...]
+    #wrong_flips = flips[~correct_or_not]
+    #inds = random.sample(range(wrong_syndromes.shape[0]), 4)
+    #samples = wrong_syndromes[inds, ...]
+    #sample_flips = wrong_flips[inds]
+    #for s, f in zip(samples, sample_flips):
+    #    plot_syndrome(s, f)
+>>>>>>> 0300dcb (fix plot errors on Alvis)
     
     
     n_correct = (preds == flips).sum()
