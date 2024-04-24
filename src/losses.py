@@ -642,7 +642,7 @@ class AttentionMWPMLossV2(torch.autograd.Function):
         edge_limits = [0, 1e3]
         for i, (edges, weights, classes, label) in enumerate(zip(edge_indx, edge_weights, edge_classes, labels)):
             
-            # begin by removing the trailing zeros from the padding
+            # begin by removing the zeros from the padding 
             mask = edges[:, 0] != edges[:, 1]
             edges = edges[mask, :].T
 
@@ -652,6 +652,7 @@ class AttentionMWPMLossV2(torch.autograd.Function):
             edges = edges.cpu().numpy()
             _weights = weights.cpu().numpy().squeeze()
             classes = classes.cpu().numpy().squeeze()
+            
     
             prediction, match_mask = mwpm_w_grad_v2(edges, _weights, classes)
             desired_weights = torch.zeros(weights.shape)
