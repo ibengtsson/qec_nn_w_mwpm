@@ -35,9 +35,10 @@ def main():
     remove_virtual = True
     #trainer.train_warmup()
     syndromes, flips, n_id = evaluator.create_split_test_set()
+    n_removed = 0
     if remove_virtual:
-        syndromes, flips = remove_virtual_nodes(syndromes, flips)
-    wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id)
+        syndromes, flips, n_removed = remove_virtual_nodes(syndromes, flips)
+    wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id, n_removed)
     #wrong_ratio, all_ratio, wrong_virtual_ratio = calculate_ratios(syndromes, wrong_syndromes, "z")
     #num_z, num_x, num_z_wrong, num_x_wrong = get_node_counts(syndromes, wrong_syndromes)
     #save_ratios(num_z, num_x, num_z_wrong, num_x_wrong)
@@ -45,17 +46,19 @@ def main():
 
 def remove_virtual_nodes(syndromes, flips):
     label = {"z": 3, "x": 1}
+    n_removed = 0
     for i in range(len(syndromes)):
         syndrome = syndromes[i].astype(np.float32)
         flip = flips[i]
         _even_odd_all = np.count_nonzero(syndrome == label["z"], axis=(1, 2, 3)) & 1
+        n_removed += _even_odd_all.sum()
         all_even = np.logical_not(_even_odd_all)
         no_virtual = syndrome[all_even,...]
         no_virtual_flips = flip[all_even]
         #print(no_virtual.shape)
         syndromes[i] = no_virtual
         flips[i] = no_virtual_flips
-    return syndromes, flips
+    return syndromes, flips, n_removed
     
 def calculate_ratios(syndromes, wrong_syndromes, experiment):
     label = {"z": 3, "x": 1}

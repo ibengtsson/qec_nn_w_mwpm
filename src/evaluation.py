@@ -97,8 +97,9 @@ class ModelEval:
         return syndromes, flips, n_id
     
 
-    def evaluate_test_set(self, syndromes, flips, n_identities):
+    def evaluate_test_set(self, syndromes, flips, n_identities, n_removed):
         n_graphs = self.training_settings["dataset_size"]
+        n_graphs = n_graphs-n_removed
         # is n_graphs=n_syndromes? i dont think so
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
         n_correct_preds = 0
