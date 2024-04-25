@@ -552,51 +552,68 @@ class AttentionMWPMLoss(torch.autograd.Function):
         grads = torch.zeros_like(edge_weights, device="cpu")
         
         # class weighting
-        identity_w = (1 / (labels == 0).sum()) * (labels.shape[0] / 2.0)
-        flip_w = (1 / (labels == 1).sum()) * (labels.shape[0] / 2.0)
+        identity_w = (1 / np.maximum((labels == 0).sum(), 1)) * (labels.shape[0] / 2.0)
+        flip_w = (1 / np.maximum((labels == 1).sum(), 1)) * (labels.shape[0] / 2.0)
         class_weight = {0: identity_w, 1: flip_w}
 
         loss = 0
         wrong_inds = []
+        test = []
         for i, (edges, weights, classes, label) in enumerate(zip(edge_indx, edge_weights, edge_classes, labels)):
             
             # begin by removing the trailing zeros from the padding
             mask = edges[:, 0] != edges[:, 1]
             edges = edges[mask, :].T
-
             weights = weights[mask]
             classes = classes[mask]
 
             edges = edges.cpu().numpy()
             _weights = weights.cpu().numpy().squeeze()
             classes = classes.cpu().numpy().squeeze()
-    
+
             prediction, match_mask = mwpm_w_grad_v2(edges, _weights, classes)
             desired_weights = torch.zeros(weights.shape)
-            matching_componesation = torch.zeros(weights.shape)
+            matching_compensation = torch.zeros(weights.shape)
             
             if prediction == label:
                 desired_weights[~match_mask] = 1
                 desired_weights[match_mask] = 0
                 
             else:
-                desired_weights[match_mask] = 1
-                desired_weights[~match_mask] = 0
+            
+                # find a label        
+                if edges.shape[1] > 1:
+                    n = 30
+                    k = 0
+                    while (prediction != label and k <  n):
+                        w = np.random.rand(weights.shape[0])
+                        prediction, trial_mask = mwpm_w_grad_v2(edges, w, classes)
+                        k += 1
+                    if k < n:
+                        desired_weights[~trial_mask] = 1
+                        desired_weights[trial_mask] = 0
+                    else:
+                        # default
+                        desired_weights[match_mask] = 1
+                        desired_weights[~match_mask] = 0
+                else:
+                    # default
+                    desired_weights[match_mask] = 1
                 
                 # save indices to wrong predictions
                 wrong_inds.append(i)
             
             
-            matching_componesation[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
-            matching_componesation[match_mask] = edges.shape[1] / np.maximum(match_mask.sum(), 1)
+            matching_compensation[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
+            matching_compensation[match_mask] = edges.shape[1] / np.maximum(match_mask.sum(), 1)
             
             # loss
             first_log = torch.clamp(torch.log(weights), min=-100, max=None)
             second_log = torch.clamp(torch.log(1 - weights), min=-100, max=None)
-            loss += (-(desired_weights * first_log + (1 - desired_weights) * second_log) * matching_componesation * class_weight[label]).sum()
+            loss += (-(desired_weights * first_log + (1 - desired_weights) * second_log) * matching_compensation * class_weight[label]).sum()
             
             # gradients
-            grads[i, mask] = (weights - desired_weights) * matching_componesation * class_weight[label]
+            grads[i, mask] = (weights - desired_weights) * matching_compensation * class_weight[label]
    
         # move gradients and loss to GPU
         grads = grads.to(edge_weights.device)
@@ -615,6 +632,8 @@ class AttentionMWPMLoss(torch.autograd.Function):
         _0,
     ):
         grads, = ctx.saved_tensors
+        if torch.isnan(grads).sum() > 0:
+            print("NaNs in gradient!")
         return None, grads, None, None
     
 class AttentionMWPMLossV2(torch.autograd.Function):
@@ -656,7 +675,7 @@ class AttentionMWPMLossV2(torch.autograd.Function):
     
             prediction, match_mask = mwpm_w_grad_v2(edges, _weights, classes)
             desired_weights = torch.zeros(weights.shape)
-            matching_componesation = torch.zeros(weights.shape)
+            matching_compensation = torch.zeros(weights.shape)
             
             if prediction == label:
                 desired_weights[~match_mask] = edge_limits[1]
@@ -670,14 +689,14 @@ class AttentionMWPMLossV2(torch.autograd.Function):
                 wrong_inds.append(i)
             
             
-            matching_componesation[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
-            matching_componesation[match_mask] = edges.shape[1] / np.maximum(match_mask.sum(), 1)
+            matching_compensation[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
+            matching_compensation[match_mask] = edges.shape[1] / np.maximum(match_mask.sum(), 1)
             
             # loss
             loss += ((desired_weights - weights) ** 2 / weights.shape[0]).sum()
             
             # gradients
-            grads[i, mask] = (weights - desired_weights) * matching_componesation * class_weight[label]
+            grads[i, mask] = (weights - desired_weights) * matching_compensation * class_weight[label]
    
         # move gradients and loss to GPU
         grads = grads.to(edge_weights.device)
