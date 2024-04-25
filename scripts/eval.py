@@ -32,12 +32,11 @@ def main():
     
     # train model
     evaluator = ModelEval(model, config=config)
-    remove_virtual = False
     #trainer.train_warmup()
     syndromes, flips, n_id = evaluator.create_split_test_set()
     n_removed = 0
-    if remove_virtual:
-        syndromes, flips, n_removed = remove_virtual_nodes(syndromes, flips)
+    wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id, n_removed)
+    syndromes, flips, n_removed = remove_virtual_nodes(syndromes, flips)
     wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id, n_removed)
     #wrong_ratio, all_ratio, wrong_virtual_ratio = calculate_ratios(syndromes, wrong_syndromes, "z")
     #num_z, num_x, num_z_wrong, num_x_wrong = get_node_counts(syndromes, wrong_syndromes)
