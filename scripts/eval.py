@@ -36,7 +36,8 @@ def main():
     syndromes, flips, n_id = evaluator.create_split_test_set()
     wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id)
     wrong_ratio, all_ratio, wrong_virtual_ratio = calculate_ratios(syndromes, wrong_syndromes, "z")
-    #num_z, num_x, num_z_wrong, num_x_wrong = get_node_counts()
+    num_z, num_x, num_z_wrong, num_x_wrong = get_node_counts(syndromes, wrong_syndromes)
+    save_ratios(num_z, num_x, num_z_wrong, num_x_wrong)
     
 
     
@@ -70,6 +71,16 @@ def save_syndromes(wrong_syndromes, wrong_flips):
     with open(file_flip, 'wb') as f:
         np.save(f, wrong_flips)
 
+def save_ratios(n_z, n_x, wrong_z, wrong_x):
+    dict = {"total_z": n_z,
+            "total_x": n_x,
+            "wrong_z": wrong_z,
+            "wrong_x": wrong_x}
+    file_dict = datetime.now().strftime("%y%m%d-%H%M%S") + "_dict.npy"
+    with open(file_dict, 'wb') as f:
+        np.save(f, dict)
+
+
 def get_node_counts(syndromes, wrong_syndromes):
     label = {"z": 3, "x": 1}
     n_syndromes = 0
@@ -80,8 +91,8 @@ def get_node_counts(syndromes, wrong_syndromes):
         _num_nodes_z = np.count_nonzero(syndrome == label["z"], axis=(1, 2, 3))
         _num_nodes_x = np.count_nonzero(syndrome == label["x"], axis=(1, 2, 3))
         if num_nodes_z is not None:
-            num_nodes_z = np.concatenate(num_nodes_z, _num_nodes_z, axis=None)
-            num_nodes_x = np.concatenate(num_nodes_x, _num_nodes_x, axis=None)
+            num_nodes_z = np.concatenate((num_nodes_z, _num_nodes_z), axis=None)
+            num_nodes_x = np.concatenate((num_nodes_x, _num_nodes_x), axis=None)
         else:
             num_nodes_z = _num_nodes_z
             num_nodes_x = _num_nodes_x
