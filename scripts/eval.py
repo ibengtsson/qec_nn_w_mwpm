@@ -10,8 +10,9 @@ import os
 import logging
 logging.disable(sys.maxsize)
 os.environ["QECSIM_CFG"] = "/cephyr/users/fridafj/Alvis"
-import matplotlib.pyplot as plt
-
+#import matplotlib.pyplot as plt
+from datetime import datetime
+import numpy as np
 
 def main():
     # command line parsing
@@ -34,6 +35,14 @@ def main():
     #trainer.train_warmup()
     syndromes, flips, n_id = evaluator.create_split_test_set()
     wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id)
+    file_syndrome = datetime.now().strftime("%y%m%d-%H%M%S") + "_syndrome.npy"
+    file_flip = datetime.now().strftime("%y%m%d-%H%M%S") + "_flip.npy"
+    with open(file_syndrome, 'wb') as f:
+        np.load(f, wrong_syndromes)
+    with open(file_flip, 'wb') as f:
+        np.save(f, wrong_flips)
+    
+
     
 
 if __name__ == "__main__":
