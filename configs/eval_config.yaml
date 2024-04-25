@@ -17,6 +17,6 @@ training_settings:
   seed: Null
   dataset_size: 1000000
   batch_size_train: 9000
-  device: cuda
+  device: cuda:1
   resume_training: True
   metric: "accuracy"

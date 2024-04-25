@@ -34,10 +34,15 @@ def main():
     evaluator = ModelEval(model, config=config)
     #trainer.train_warmup()
     syndromes, flips, n_id = evaluator.create_split_test_set()
-    
     wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id)
+    wrong_ratio, all_ratio, wrong_virtual_ratio = calculate_ratios(syndromes, wrong_syndromes, "z")
+    #num_z, num_x, num_z_wrong, num_x_wrong = get_node_counts()
+    
+
+    
+    
+def calculate_ratios(syndromes, wrong_syndromes, experiment):
     label = {"z": 3, "x": 1}
-    experiment = "z"
     even_odd_all = 0
     n_syndromes = 0
     for syndrome in syndromes:
@@ -49,19 +54,41 @@ def main():
     even_odd_wrong = np.count_nonzero(wrong_syndromes == label[experiment], axis=(1, 2, 3)) & 1
     all_syndromes_ratio = even_odd_all/n_syndromes
     wrong_syndromes_ratio = even_odd_wrong.sum()/wrong_syndromes.shape[0]
+    wrong_virtual = even_odd_wrong.sum()
+    wrong_virtual_ratio = wrong_virtual/even_odd_all
     print("wrong: ", wrong_syndromes_ratio)
     print("all: ", all_syndromes_ratio)
-
-    # file_syndrome = datetime.now().strftime("%y%m%d-%H%M%S") + "_syndrome.npy"
-    # file_flip = datetime.now().strftime("%y%m%d-%H%M%S") + "_flip.npy"
-    # with open(file_syndrome, 'wb') as f:
-    #     np.save(f, wrong_syndromes)
-    # with open(file_flip, 'wb') as f:
-    #     np.save(f, wrong_flips)
-    
+    print("wrong virtual ratio: ", wrong_virtual_ratio)
+    return wrong_syndromes_ratio, all_syndromes_ratio, wrong_virtual_ratio
 
 
-    
+def save_syndromes(wrong_syndromes, wrong_flips):
+    file_syndrome = datetime.now().strftime("%y%m%d-%H%M%S") + "_syndrome.npy"
+    file_flip = datetime.now().strftime("%y%m%d-%H%M%S") + "_flip.npy"
+    with open(file_syndrome, 'wb') as f:
+        np.save(f, wrong_syndromes)
+    with open(file_flip, 'wb') as f:
+        np.save(f, wrong_flips)
+
+def get_node_counts(syndromes, wrong_syndromes):
+    label = {"z": 3, "x": 1}
+    n_syndromes = 0
+    num_nodes_z = None
+    num_nodes_x = None
+    for syndrome in syndromes:
+        syndrome = syndrome.astype(np.float32)
+        _num_nodes_z = np.count_nonzero(syndrome == label["z"], axis=(1, 2, 3))
+        _num_nodes_x = np.count_nonzero(syndrome == label["x"], axis=(1, 2, 3))
+        if num_nodes_z is not None:
+            num_nodes_z = np.concatenate(num_nodes_z, _num_nodes_z, axis=None)
+            num_nodes_x = np.concatenate(num_nodes_x, _num_nodes_x, axis=None)
+        else:
+            num_nodes_z = _num_nodes_z
+            num_nodes_x = _num_nodes_x
+    num_z_wrong = np.count_nonzero(wrong_syndromes == label["z"], axis=(1, 2, 3))
+    num_x_wrong = np.count_nonzero(wrong_syndromes == label["x"], axis=(1, 2, 3))
+    return num_nodes_z, num_nodes_x, num_z_wrong, num_x_wrong
+
 
 if __name__ == "__main__":
     main()    
