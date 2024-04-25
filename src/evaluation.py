@@ -39,6 +39,11 @@ class ModelEval:
             )
         else:
             self.device = torch.device("cpu")
+        
+        if not (
+            self.device == torch.device("cuda") or self.device == torch.device("cpu")
+        ):
+            torch.cuda.set_device(self.device)
         # move model to correct device
         self.model = model.to(self.device)
         self.load_trained_model()
