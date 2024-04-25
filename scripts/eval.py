@@ -32,7 +32,7 @@ def main():
     
     # train model
     evaluator = ModelEval(model, config=config)
-    remove_virtual = True
+    remove_virtual = False
     #trainer.train_warmup()
     syndromes, flips, n_id = evaluator.create_split_test_set()
     n_removed = 0

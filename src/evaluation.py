@@ -137,6 +137,6 @@ class ModelEval:
             #     wrong_flips.append(_wrong_flips)
 
         # compute logical failure rate
-        failure_rate = (n_graphs - n_correct_preds - n_identities) / n_graphs
+        failure_rate = (n_graphs - n_correct_preds - n_identities) / (n_graphs-n_identities)
         print(f"We have a logical failure rate of {failure_rate}.")
         return wrong_syndromes, wrong_flips
