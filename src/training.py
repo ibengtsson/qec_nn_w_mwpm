@@ -166,10 +166,11 @@ class LSTrainer_v2:
         # simulation settings
         code_size = self.graph_settings["code_size"]
         reps = self.graph_settings["repetitions"]
-        min_error_rate = self.graph_settings["min_error_rate"]
-        max_error_rate = self.graph_settings["max_error_rate"]
+        #min_error_rate = self.graph_settings["min_error_rate"]
+        #max_error_rate = self.graph_settings["max_error_rate"]
+        one_error_rate = self.graph_settings["one_error_rate"]
 
-        error_rates = np.linspace(min_error_rate, max_error_rate, n)
+        #error_rates = np.linspace(min_error_rate, max_error_rate, n)
 
         task_dict = {
             "z": "surface_code:rotated_memory_z",
@@ -177,24 +178,24 @@ class LSTrainer_v2:
         }
         code_task = task_dict[self.graph_settings["experiment"]]
 
-        syndromes = []
-        flips = []
-        n_identities = 0
-        for p in error_rates:
-            sim = SurfaceCodeSim(
+        #syndromes = []
+        #flips = []
+        #n_identities = 0
+        #for p in error_rates:
+        sim = SurfaceCodeSim(
                 reps,
                 code_size,
-                p,
-                int(n_graphs / n),
+                one_error_rate,
+                n_graphs,
                 code_task=code_task,
             )
-            syndrome, flip, n_id = sim.generate_syndromes(use_for_mwpm=True)
-            syndromes.append(syndrome)
-            flips.append(flip)
-            n_identities += n_id
+        syndromes, flips, n_identities = sim.generate_syndromes(use_for_mwpm=True)
+            #syndromes.append(syndrome)
+            #flips.append(flip)
+            #n_identities += n_id
 
-        syndromes = np.concatenate(syndromes)
-        flips = np.concatenate(flips)
+        #syndromes = np.concatenate(syndromes)
+        #flips = np.concatenate(flips)
 
         # split into chunks to reduce memory footprint later
         batch_size = self.training_settings["batch_size_val"]
@@ -385,7 +386,8 @@ class LSTrainer_v2:
             n_repetitions = 1
 
         # create full dataset, split into smaller "batches"
-        syndromes, flips, n_trivial = self.create_multi_p_set()
+        #syndromes, flips, n_trivial = self.create_multi_p_set()
+        syndromes, flips, n_trivial = self.create_split_train_set()
         # create set of graphs from split syndrome set
         graph_set = self.create_graph_set(syndromes, flips, n_trivial)
         print("Number of dimension partitions:",n_dim_iter)

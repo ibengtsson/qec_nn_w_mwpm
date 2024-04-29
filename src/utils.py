@@ -130,6 +130,28 @@ def predict_mwpm(
 
     return np.array(preds)
 
+def predict_mwpm_attention(
+    edge_index: torch.Tensor,
+    edge_weights: torch.Tensor,
+    edge_classes: torch.Tensor,
+):
+    preds = []
+    for edges, weights, classes in zip(edge_index, edge_weights, edge_classes):
+        
+        # begin by removing the trailing zeros from the padding
+        mask = edges[:, 0] != edges[:, 1]
+        edges = edges[mask, :].T
+        weights = weights[mask]
+        classes = classes[mask]
+        
+        # run MWPM
+        edges = edges.cpu().numpy()
+        weights = weights.detach().cpu().numpy().squeeze()
+        classes = classes.detach().cpu().numpy().squeeze()
+        p = mwpm_prediction(edges, weights, classes)
+        preds.append(p)
+
+    return np.array(preds)
 
 # ctrl+c termination should be supported now, but use this function with some caution!
 def predict_mwpm_with_pool(
@@ -182,7 +204,7 @@ def ls_inference(
             edge_index, edge_weights, edge_classes, batch_labels
         )
     else:
-        preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
+        preds = predict_mwpm_attention(edge_index, edge_weights, edge_classes)
     TP = np.sum(np.logical_and(preds == 1, flips == 1))
     TN = np.sum(np.logical_and(preds == 0, flips == 0))
     FP = np.sum(np.logical_and(preds == 1, flips == 0))

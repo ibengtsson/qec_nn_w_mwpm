@@ -13,7 +13,7 @@ graph_settings:
   power: 2
   n_classes: 1
 training_settings:
-  comment: "SimpleNetworkV6, score decay 0.00001, search radius 0.01, number of selections 100"
+  comment: "GAT layer, score decay 0.00001, search radius 0.01, number of selections 100"
   suffix: "1"
   seed: Null
   dataset_size: 400000 
@@ -25,6 +25,6 @@ training_settings:
   n_repetitions: 6
   search_radius: 0.01
   device: cuda
-  resume_training: True
+  resume_training: False
   score_decay: 0.00001
   metric: "accuracy"
