@@ -267,6 +267,8 @@ def extract_edges(edge_index, edge_attr, batch_labels):
 
     edge_batch = batch_labels[edge_index[0]]
     edge_index = edge_index - ptr[edge_batch]
+    #print(edge_batch.shape)
+    #print(batch_size)
     sizes = degree(edge_batch, batch_size, dtype=torch.long).cpu().tolist()
 
     edge_range = torch.arange(0, edge_index.shape[1]).to(edge_index.device)
