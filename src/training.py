@@ -35,10 +35,10 @@ class LSTrainer_v2:
         else:
             self.device = torch.device("cpu")
 
-        if not (
-            self.device == torch.device("cuda") or self.device == torch.device("cpu")
-        ):
-            torch.cuda.set_device(self.device)
+        # if not (
+        #     self.device == torch.device("cuda") or self.device == torch.device("cpu")
+        # ):
+        #     torch.cuda.set_device(self.device)
 
         print(f"Running model on {self.device} with dataset size {self.training_settings['dataset_size']}.")
         # create a dictionary saving training metrics

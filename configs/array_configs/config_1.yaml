@@ -24,7 +24,7 @@ training_settings:
   repeat_selection: True
   n_repetitions: 6
   search_radius: 0.01
-  device: cuda:1
+  device: cuda
   resume_training: False
   score_decay: 0.00001
   metric: "accuracy"
