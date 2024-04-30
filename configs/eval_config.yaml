@@ -1,5 +1,5 @@
 paths:
-  saved_model_path: ../training_outputs/d5_d_t_5_240408-104109_load_f_d5_d_t_5_240404-131907.pt
+  saved_model_path: ../other/d5_d_t_5_240426-103025.pt
 graph_settings:
   experiment: "z"
   code_size: 5
@@ -15,8 +15,8 @@ training_settings:
   suffix: "a"
   comment: ""
   seed: Null
-  dataset_size: 1000000
-  batch_size_train: 9000
+  dataset_size: 1000
+  batch_size_train: 100
   device: cuda:1
   resume_training: True
   metric: "accuracy"

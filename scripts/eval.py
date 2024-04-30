@@ -3,7 +3,7 @@ import torch
 import argparse
 import sys
 sys.path.append("../")
-from src.models import GraphNN, SimpleGraphNNV4, SimpleGraphNNV6
+from src.models import GraphNN, SimpleGraphNNV4, SimpleGraphNNV6, GraphAttention, GraphAttentionV2, GraphAttentionV3
 from src.evaluation import ModelEval
 from src.utils import plot_syndrome
 import os
@@ -24,7 +24,8 @@ def main():
     # create a model
     #model = GraphNN()
     #model = SimpleGraphNNV4()
-    model = SimpleGraphNNV6()
+    #model = SimpleGraphNNV6()
+    model = GraphAttentionV3()
     #model = GATNN()
     config = Path(args.configuration)
     
@@ -36,8 +37,8 @@ def main():
     syndromes, flips, n_id = evaluator.create_split_test_set()
     n_removed = 0
     wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id, n_removed)
-    syndromes, flips, n_removed = remove_virtual_nodes(syndromes, flips)
-    wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id, n_removed)
+    #syndromes, flips, n_removed = remove_virtual_nodes(syndromes, flips)
+    #wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id, n_removed)
     #wrong_ratio, all_ratio, wrong_virtual_ratio = calculate_ratios(syndromes, wrong_syndromes, "z")
     #num_z, num_x, num_z_wrong, num_x_wrong = get_node_counts(syndromes, wrong_syndromes)
     #save_ratios(num_z, num_x, num_z_wrong, num_x_wrong)
