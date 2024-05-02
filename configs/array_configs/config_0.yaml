@@ -13,18 +13,18 @@ graph_settings:
   power: 2
   n_classes: 1
 training_settings:
-  comment: "SimpleNNV6, score decay 0.0001, search radius 0.05, number of selections 100"
+  comment: "GAT layer, score decay 0.0001, search radius 0.05, number of selections 100"
   suffix: "0"
   seed: Null
-  dataset_size: 400000
-  batch_size_train: 9000
-  validation_set_size: 40000
-  batch_size_val: 9000  
-  n_selections: 100
+  dataset_size: 10000
+  batch_size_train: 900
+  validation_set_size: 10000
+  batch_size_val: 900  
+  n_selections: 1000
   repeat_selection: True
   n_repetitions: 6
   search_radius: 0.05
-  device: cuda
+  device: cuda:1
   resume_training: False
   score_decay: 0.0001
   metric: "accuracy"
