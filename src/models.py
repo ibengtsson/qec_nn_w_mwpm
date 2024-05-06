@@ -1248,6 +1248,130 @@ class GraphAttentionV3(nn.Module):
         edges = edges[:, ::2, :]
 
         return edges, edge_feat, edge_classes
+    
+class GraphAttentionV4(nn.Module):
+
+    def __init__(
+        self,
+        hidden_channels_GCN=[32, 64],
+        n_node_features=5,
+    ):
+        super().__init__()
+
+        # Weight embedding
+        self.weight_emb = nn.Linear(3, 1)
+
+        # GCN layers
+        channels = [n_node_features] + hidden_channels_GCN
+        self.graph_layers = nn.ModuleList(
+            [
+                nng.GraphConv(in_channels, out_channels)
+                for (in_channels, out_channels) in zip(channels[:-1], channels[1:])
+            ]
+        )
+
+        # Edge embedding
+        self.edge_emb = nn.Linear(3, hidden_channels_GCN[-1])
+
+        # Attention layer
+        attention_dim = hidden_channels_GCN[-1] * 3
+        self.attention_one = SelfAttention(attention_dim)
+        self.attention_two = SelfAttention(attention_dim)
+
+        # Output layer
+        self.output_layer = nn.Linear(attention_dim, 1)
+
+        # Layer to split syndrome into X (Z)-graphs
+        self.split_syndromes = SplitSyndromes()
+
+        # Activation function
+        self.activation = torch.nn.ReLU()
+        
+        # Normalisations
+        self.graph_norm = nng.GraphNorm(channels[-1])
+        self.layer_norm = nn.LayerNorm(attention_dim)
+
+    def forward(
+        self,
+        x,
+        edges,
+        edge_attr,
+        detector_labels,
+        batch_labels,
+    ):
+
+        # weight embedding
+        w = edge_attr[:, [0]]
+        c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
+        
+        w = self.weight_emb(torch.cat([w, c], dim=-1))
+        w = self.activation(w)
+
+        # graph layers
+        for layer in self.graph_layers:
+            x = layer(x, edges, w)
+            x = self.activation(x)
+
+        # normalisation
+        x = self.graph_norm(x, batch_labels)
+        
+        # split syndromes so only X (Z) nodes remain and create an edge embedding
+        edges, edge_attr = self.split_syndromes(edges, edge_attr, detector_labels)
+
+        # create an embedding for weights and classes on an edge level
+        w = edge_attr[:, [0]]
+        c = one_hot((edge_attr[:, 1]).to(dtype=torch.long), num_classes=2)
+        emb = self.edge_emb(torch.cat([w, c], dim=-1))
+        emb = self.activation(emb)
+
+        x_src, x_dst = x[edges[0, :]], x[edges[1, :]]
+        edge_feat = torch.cat([x_src, emb, x_dst], dim=-1) 
+        
+        # unbatch data and pad sequences
+        inds = batch_labels[edges[0, :]]
+        edge_feat = unbatch(edge_feat, inds)
+        edge_feat = torch.nn.utils.rnn.pad_sequence(edge_feat, batch_first=True)
+
+        src_edges = unbatch(edges[0, :], inds)
+        trg_edges = unbatch(edges[1, :], inds)
+
+        src_edges = torch.nn.utils.rnn.pad_sequence(src_edges, batch_first=True)
+        trg_edges = torch.nn.utils.rnn.pad_sequence(trg_edges, batch_first=True)
+        edges = torch.stack([src_edges, trg_edges], dim=-1)
+
+        edge_classes = unbatch(edge_attr[:, [1]], inds)
+        edge_classes = torch.nn.utils.rnn.pad_sequence(edge_classes, batch_first=True)
+        
+        # create mask ensuring attention is not applied for the padding
+        mask = (edges[:, :, 0] == edges[:, :, 1])
+
+        # send the edge features through an attention layer
+        attention_out = self.attention_one(edge_feat, mask=mask)
+
+        # add/norm with skip connection
+        edge_feat = edge_feat + attention_out
+        edge_feat = self.layer_norm(edge_feat)
+        
+        # do another attention layer
+        attention_out = self.attention_two(edge_feat, mask=mask)
+        
+        # add/norm with skip connection
+        edge_feat = edge_feat + attention_out
+        edge_feat = self.layer_norm(edge_feat)
+        
+        # output
+        edge_feat = self.output_layer(edge_feat)
+        
+        # save the edges with minimum weights (for each duplicate edge)
+        edge_feat = torch.cat([edge_feat[:, ::2, :], edge_feat[:, 1::2, :]], dim=2)
+        edge_classes = torch.cat([edge_classes[:, ::2, :], edge_classes[:, 1::2, :]], dim=2)
+        
+        edge_feat, min_inds = torch.min(edge_feat, dim=2, keepdim=True)
+        edge_classes = torch.gather(edge_classes, -1, min_inds)
+        
+        edges = edges[:, ::2, :]
+
+        return edges, edge_feat, edge_classes
 
         
 # class GraphAttention(nn.Module):
