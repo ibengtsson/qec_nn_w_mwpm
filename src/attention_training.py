@@ -67,10 +67,10 @@ class ModelTrainer:
         self.optimal_weights = None
 
         # move model to correct device, save loss and instantiate the optimizer
-        if not (
-            self.device == torch.device("cuda") or self.device == torch.device("cpu")
-        ):
-            torch.cuda.set_device(self.device)
+        #if not (
+            #self.device == torch.device("cuda") or self.device == torch.device("cpu")
+        #):
+            #torch.cuda.set_device(self.device)
 
         self.model = GraphAttentionV3(
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],

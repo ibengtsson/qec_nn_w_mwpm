@@ -412,9 +412,25 @@ class MWPMLoss_v4(torch.autograd.Function):
                 _desired_weights[match_mask] = 0
 
             else:
-                _desired_weights[match_mask] = 1
-                _desired_weights[~match_mask] = 0
-                wrong_inds.append(i)
+                
+                # find a label        
+                if edges.shape[1] > 1:
+                    n = 30
+                    k = 0
+                    while (prediction != label and k <  n):
+                        w = np.random.rand(weights.shape[0])
+                        prediction, trial_mask = mwpm_w_grad_v2(edges, w, classes)
+                        k += 1
+                    if k < n:
+                        _desired_weights[~trial_mask] = 1
+                        _desired_weights[trial_mask] = 0
+                    else:
+                        # default
+                        _desired_weights[match_mask] = 1
+                        _desired_weights[~match_mask] = 0
+                else:
+                    # default
+                    _desired_weights[match_mask] = 1
             
             _bias_reversal[~match_mask] = edges.shape[1] / np.maximum((~match_mask).sum(), 1)
             _bias_reversal[match_mask] = edges.shape[1] / np.maximum(match_mask.sum(), 1)

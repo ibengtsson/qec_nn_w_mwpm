@@ -1,19 +1,21 @@
 paths:
-  save_dir: ../training_outputs/
-  saved_model_path: ../training_outputs/d5_d_t_5_240425-224429.pt
+  save_dir: ../training_outputs/report/
+  saved_model_path:
 model_settings:
   hidden_channels_GCN:
-    - 128
     - 256
+    - 512
   hidden_channels_MLP:
     - 256
-    - 256
+    - 128
+    - 128
+    - 64
 graph_settings:
   experiment: "z"
   code_size: 5
   repetitions: 5
   min_error_rate: 0.001
-  max_error_rate: 0.001
+  max_error_rate: 0.005
   m_nearest_nodes: 20
   n_node_features: 5
   power: 2
@@ -22,11 +24,11 @@ training_settings:
   seed: Null
   dataset_size: 1000000
   validation_set_size: 30000
-  batch_size: 40000
+  batch_size: 20000
   tot_epochs: 1000
-  lr: 0.00001
+  lr: 0.0001
   device: cuda
-  resume_training: True
-  current_epoch: 501
-  comment: "Attention - testing slightly different loss."
+  resume_training: False
+  current_epoch: 0
+  comment: "Linear layers."
 
