@@ -7,9 +7,9 @@ from src.graph import get_batch_of_graphs, extract_edges
 from src.models import mwpm_prediction
 import torch.multiprocessing as mp
 from torch.multiprocessing import Pool, cpu_count
-import seaborn as sns
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
+#import seaborn as sns
+#import matplotlib.pyplot as plt
+#import matplotlib.ticker as mticker
 
 def time_it(func, reps, *args):
     start_t = datetime.datetime.now()
@@ -245,27 +245,27 @@ def get_misclassified_syndromes(
     wrong_flips = flips[wrong_preds[0]]
     return wrong_syndromes, wrong_flips
 
-def plot_syndrome(syndrome, flip):
-    sz, _, reps = syndrome.shape
-    n = (reps // 2) + (reps % 2)
+# def plot_syndrome(syndrome, flip):
+#     sz, _, reps = syndrome.shape
+#     n = (reps // 2) + (reps % 2)
     
-    fig, axes = plt.subplots(nrows=n , ncols=2, figsize=(6, n*3))
-    colors = sns.color_palette(palette="Set2", n_colors=3)
-    colors = ["white", "lawngreen", "royalblue"]
-    cbar_ticks = [0.5, 1.5, 2.5]
-    cbar_tick_labels = mticker.FixedFormatter(["Identity", "X", "Z"])
-    for i, ax in enumerate(axes.flatten()):
+#     fig, axes = plt.subplots(nrows=n , ncols=2, figsize=(6, n*3))
+#     colors = sns.color_palette(palette="Set2", n_colors=3)
+#     colors = ["white", "lawngreen", "royalblue"]
+#     cbar_ticks = [0.5, 1.5, 2.5]
+#     cbar_tick_labels = mticker.FixedFormatter(["Identity", "X", "Z"])
+#     for i, ax in enumerate(axes.flatten()):
         
-        sns.heatmap(syndrome[:, :, i], vmin=0, vmax=3, cmap=colors, square=True, ax=ax, cbar_kws={"ticks": cbar_ticks, "format": cbar_tick_labels})
-        # ax.invert_yaxis()
-        ax.hlines(range(1, sz), xmin=0, xmax=sz, color="k")
-        ax.vlines(range(1, sz), ymin=0, ymax=sz, color="k")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_title(f"t = {i}")
+#         sns.heatmap(syndrome[:, :, i], vmin=0, vmax=3, cmap=colors, square=True, ax=ax, cbar_kws={"ticks": cbar_ticks, "format": cbar_tick_labels})
+#         # ax.invert_yaxis()
+#         ax.hlines(range(1, sz), xmin=0, xmax=sz, color="k")
+#         ax.vlines(range(1, sz), ymin=0, ymax=sz, color="k")
+#         ax.set_xticks([])
+#         ax.set_yticks([])
+#         ax.set_title(f"t = {i}")
     
-    flip_dict = {0: "No flip", 1: "Flip"}
-    fig.suptitle(flip_dict[flip])
+#     flip_dict = {0: "No flip", 1: "Flip"}
+#     fig.suptitle(flip_dict[flip])
 
 
 def calc_flip_ratio(flips):
