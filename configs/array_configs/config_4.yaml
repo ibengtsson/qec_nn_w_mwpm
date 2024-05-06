@@ -1,0 +1,30 @@
+paths:
+  save_dir: ../training_outputs/
+  saved_model_path: ../training_outputs/d5_d_t_5_240408-104109_load_f_d5_d_t_5_240404-131907.pt
+graph_settings:
+  experiment: "z"
+  code_size: 5
+  repetitions: 5
+  min_error_rate: 0.001
+  max_error_rate: 0.005
+  one_error_rate: 0.005
+  m_nearest_nodes: 20
+  n_node_features: 5
+  power: 2
+  n_classes: 1
+training_settings:
+  comment: "SimpleNNV4 layer, score decay 0.0001, search radius 0.1, number of selections 100"
+  suffix: "1"
+  seed: Null
+  dataset_size: 400000 
+  batch_size_train: 9000
+  validation_set_size: 40000
+  batch_size_val: 9000
+  n_selections: 100
+  repeat_selection: True
+  n_repetitions: 6
+  search_radius: 0.1
+  device: cuda
+  resume_training: False
+  score_decay: 0.0001
+  metric: "accuracy"
