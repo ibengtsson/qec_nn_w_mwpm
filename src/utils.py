@@ -93,7 +93,7 @@ def inference(
             edge_index, edge_weights, edge_classes, batch_labels
         )
     else:
-        preds = predict_mwpm_attention(edge_index, edge_weights, edge_classes)
+        preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
     TP = np.sum(np.logical_and(preds == 1, flips == 1))
     TN = np.sum(np.logical_and(preds == 0, flips == 0))
     FP = np.sum(np.logical_and(preds == 1, flips == 0))
@@ -204,7 +204,7 @@ def ls_inference(
             edge_index, edge_weights, edge_classes, batch_labels
         )
     else:
-        preds = predict_mwpm_attention(edge_index, edge_weights, edge_classes)
+        preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
     TP = np.sum(np.logical_and(preds == 1, flips == 1))
     TN = np.sum(np.logical_and(preds == 0, flips == 0))
     FP = np.sum(np.logical_and(preds == 1, flips == 0))
@@ -238,7 +238,7 @@ def get_misclassified_syndromes(
             edge_index, edge_weights, edge_classes, batch_labels
         )
     else:
-        preds = predict_mwpm_attention(edge_index, edge_weights, edge_classes)
+        preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
     
     wrong_preds = np.where(preds != flips)
     wrong_syndromes = syndromes[wrong_preds[0],...]
@@ -266,3 +266,9 @@ def plot_syndrome(syndrome, flip):
     
     flip_dict = {0: "No flip", 1: "Flip"}
     fig.suptitle(flip_dict[flip])
+
+
+def calc_flip_ratio(flips):
+    num_flip = np.count_nonzero(flips==1)
+    total = flips.size
+    return num_flip/total

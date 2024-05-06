@@ -75,12 +75,12 @@ class LSTrainer_v2:
             path = self.save_dir / (model_name + ".pt")
         else:
             path = self.save_dir / (self.save_name + ".pt")
-        self.optimal_weights = self.model.state_dict()
+        #self.optimal_weights = self.model.state_dict()
         if self.training_settings["resume_training"]:
             attributes = {
                 "training_history": self.training_history,
                 "model": self.optimal_weights,
-                "model_vec": torch.nn.utils.parameters_to_vector(self.model.parameters()),
+                "model_vec": self.optimal_vec,
                 "graph_settings": self.graph_settings,
                 "training_settings": self.training_settings,
                 "training_history_prev": self.training_history_prev
@@ -89,7 +89,7 @@ class LSTrainer_v2:
             attributes = {
                 "training_history": self.training_history,
                 "model": self.optimal_weights,
-                "model_vec": torch.nn.utils.parameters_to_vector(self.model.parameters()),
+                "model_vec": self.optimal_vec,
                 "graph_settings": self.graph_settings,
                 "training_settings": self.training_settings
             }
@@ -424,11 +424,15 @@ class LSTrainer_v2:
                         self.training_history["alt_val_score"].append(val_bal_acc)
                         if val_accuracy > self.training_history["best_val_score"]:
                             self.training_history["best_val_score"] = val_accuracy
+                            self.optimal_weights = self.model.state_dict()
+                            self.optimal_vec = torch.nn.utils.parameters_to_vector(self.model.parameters())
                     elif metric == "balanced":
                         self.training_history["val_score"].append(val_bal_acc)
                         self.training_history["alt_val_score"].append(val_accuracy)
                         if val_bal_acc > self.training_history["best_val_score"]:
                             self.training_history["best_val_score"] = val_bal_acc
+                            self.optimal_weights = self.model.state_dict()
+                            self.optimal_vec = torch.nn.utils.parameters_to_vector(self.model.parameters())
                     partial_t = datetime.now() - partial_start_t
                     self.training_history["partial_time"].append(partial_t)
                     if self.save_model:
@@ -445,11 +449,15 @@ class LSTrainer_v2:
                         self.training_history["alt_val_score"].append(val_bal_acc)
                         if val_accuracy > self.training_history["best_val_score"]:
                             self.training_history["best_val_score"] = val_accuracy
+                            self.optimal_weights = self.model.state_dict()
+                            self.optimal_vec = torch.nn.utils.parameters_to_vector(self.model.parameters())
                     elif metric == "balanced":
                         self.training_history["val_score"].append(val_bal_acc)
                         self.training_history["alt_val_score"].append(val_accuracy)
                         if val_bal_acc > self.training_history["best_val_score"]:
                             self.training_history["best_val_score"] = val_bal_acc
+                            self.optimal_weights = self.model.state_dict()
+                            self.optimal_vec = torch.nn.utils.parameters_to_vector(self.model.parameters())
                     if self.save_model:
                         self.save_model_w_training_settings()         
         tot_t = datetime.now() - tot_start_t

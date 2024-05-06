@@ -779,7 +779,7 @@ class GraphAttentionV3(nn.Module):
 
     def __init__(
         self,
-        hidden_channels_GCN=[256, 512],
+        hidden_channels_GCN=[32, 64],
         n_node_features=5,
     ):
         super().__init__()
