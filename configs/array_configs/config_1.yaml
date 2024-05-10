@@ -27,4 +27,4 @@ training_settings:
   device: cuda
   resume_training: False
   score_decay: 0.0001
-  metric: "accuracy"
+  metric: "balanced"

@@ -20,9 +20,9 @@ def main():
     
     # create a model
     #model = GraphNN()
-    #model = SimpleGraphNNV4()
+    model = SimpleGraphNNV4()
     #model = SimpleGraphNNV6()
-    model = GraphAttentionV3()
+    #model = GraphAttentionV3()
     #model = GATNN()
     config = Path(args.configuration)
     
