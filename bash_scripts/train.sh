@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -A NAISS2023-5-353 -p alvis
-#SBATCH -t 7-00:00:00 			# time limit days-hours:minutes:seconds
+#SBATCH -t 3-00:00:00 			# time limit days-hours:minutes:seconds
 #SBATCH -J mwpm_training
 #SBATCH -o ../job_outputs/mwpm_nn_training_%j.out
 #SBATCH --cpus-per-task=1
