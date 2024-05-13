@@ -151,7 +151,7 @@ def main():
 
     # append results to file
     file_path = Path("../data/failure_rates.csv")
-    data = [name, gcn_dims, mlp_dims, mixed, tot_params, failure_rate]
+    data = [model_path.name, name, gcn_dims, mlp_dims, mixed, tot_params, failure_rate]
 
     if file_path.is_file():
         with open(file_path, "a", newline="") as f:
@@ -162,6 +162,7 @@ def main():
             writer = csv.writer(f)
             writer.writerow(
                 [
+                    "Path",
                     "Type of head",
                     "GCN-layers",
                     "MLP-layers",
