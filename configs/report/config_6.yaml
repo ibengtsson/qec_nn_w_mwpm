@@ -1,6 +1,6 @@
 paths:
   save_dir: ../training_outputs/report/
-  saved_model_path:
+  saved_model_path: ../training_outputs/report/d5_d_t_5_240505-231558.pt
 model_settings:
   hidden_channels_GCN:
     - 256
@@ -25,10 +25,10 @@ training_settings:
   dataset_size: 1000000
   validation_set_size: 60000
   batch_size: 80000
-  tot_epochs: 1000
-  lr: 0.0001
+  tot_epochs: 2000
+  lr: 0.00001
   device: cuda
-  resume_training: False
-  current_epoch: 0
-  comment: "Linear layers."
+  resume_training: True
+  current_epoch: 1000
+  comment: "Linear layers, continuation test."
 

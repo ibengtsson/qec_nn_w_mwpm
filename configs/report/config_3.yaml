@@ -1,6 +1,6 @@
 paths:
   save_dir: ../training_outputs/report/
-  saved_model_path:
+  saved_model_path: ../training_outputs/report/d5_d_t_5_240504-163103.pt
 model_settings:
   hidden_channels_GCN:
     - 256
@@ -26,7 +26,7 @@ training_settings:
   tot_epochs: 1000
   lr: 0.0001
   device: cuda
-  resume_training: False
-  current_epoch: 0
+  resume_training: True
+  current_epoch: 540
   comment: "Attention - for report."
 
