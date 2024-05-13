@@ -99,7 +99,7 @@ def inference(
     )
 
     # added virtual nodes
-    odd_nodes = np.count_nonzero(syndromes == 3, axis=(1, 2, 3)) & 1
+    # odd_nodes = np.count_nonzero(syndromes == 3, axis=(1, 2, 3)) & 1
     
     edge_weights = torch.nn.functional.sigmoid(edge_weights)
     if nested_tensors:
@@ -107,14 +107,14 @@ def inference(
     else:
         preds = predict_mwpm(edge_index, edge_weights, edge_classes, batch_labels)
 
-    correct_or_not = (preds == flips)
-    wrong_syndromes = syndromes[~correct_or_not, ...]
-    wrong_flips = flips[~correct_or_not]
-    inds = random.sample(range(wrong_syndromes.shape[0]), 4)
-    samples = wrong_syndromes[inds, ...]
-    sample_flips = wrong_flips[inds]
-    for s, f in zip(samples, sample_flips):
-        plot_syndrome(s, f)
+    # correct_or_not = (preds == flips)
+    # wrong_syndromes = syndromes[~correct_or_not, ...]
+    # wrong_flips = flips[~correct_or_not]
+    # inds = random.sample(range(wrong_syndromes.shape[0]), 4)
+    # samples = wrong_syndromes[inds, ...]
+    # sample_flips = wrong_flips[inds]
+    # for s, f in zip(samples, sample_flips):
+    #     plot_syndrome(s, f)
     
     
     n_correct = (preds == flips).sum()
@@ -188,7 +188,7 @@ def attention_inference(
             x, edge_index, edge_attr, detector_labels, batch_labels,
         )
         
-        # edge_weights = torch.nn.functional.sigmoid(edge_weights) * 100
+        edge_weights = torch.nn.functional.sigmoid(edge_weights)
         preds = predict_mwpm_attention(edge_index, edge_weights, edge_classes)
 
         n_correct += (preds == f).sum()
@@ -203,13 +203,13 @@ def predict_mwpm_attention(
 ):
     preds = []
     for edges, weights, classes in zip(edge_index, edge_weights, edge_classes):
-        
+
         # begin by removing the trailing zeros from the padding
         mask = edges[:, 0] != edges[:, 1]
         edges = edges[mask, :].T
         weights = weights[mask]
         classes = classes[mask]
-        
+
         # run MWPM
         edges = edges.cpu().numpy()
         weights = weights.detach().cpu().numpy().squeeze()
@@ -362,7 +362,8 @@ def mwpm_w_grad_v2(edges, weights, classes):
     # if only one edge, we only have one matching
     if edges.shape[1] == 1:
         flip = classes.sum() & 1
-        mask = np.ones(weights.shape, dtype=bool)
+        mask = np.ones(shape=(1, 1), dtype=bool)
+
         return flip, mask
 
 

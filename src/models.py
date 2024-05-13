@@ -1139,6 +1139,7 @@ class GraphAttentionV3(nn.Module):
         self,
         hidden_channels_GCN=[32, 64],
         n_node_features=5,
+        num_heads=1,
     ):
         super().__init__()
 
@@ -1159,7 +1160,7 @@ class GraphAttentionV3(nn.Module):
 
         # Attention layer
         attention_dim = hidden_channels_GCN[-1] * 3
-        self.attention = SelfAttention(attention_dim)
+        self.attention = SelfAttention(attention_dim, num_heads=num_heads)
 
         # Output layer
         self.output_layer = nn.Linear(attention_dim, 1)
