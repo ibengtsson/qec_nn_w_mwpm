@@ -238,7 +238,7 @@ class SimpleGraphNNV4(nn.Module):
     def __init__(
         self,
         hidden_channels_GCN=[256, 512],
-        hidden_channels_MLP=[256, 128, 128, 64],
+        hidden_channels_MLP=[256],
         n_node_features=5,
     ):
         super().__init__()
@@ -779,7 +779,7 @@ class GraphAttentionV3(nn.Module):
 
     def __init__(
         self,
-        hidden_channels_GCN=[256, 512],
+        hidden_channels_GCN=[128, 256],
         n_node_features=5,
     ):
         super().__init__()

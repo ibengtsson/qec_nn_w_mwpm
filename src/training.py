@@ -51,6 +51,8 @@ class LSTrainer_v2:
         training_history["iter_improvement"] = []
         training_history["partial_time"] = []
         training_history["tot_time"] = 0
+        training_history["val_logical"] = []
+        training_history["train_logical"] = []
         self.training_history = training_history
 
         # move model to correct device
@@ -359,7 +361,7 @@ class LSTrainer_v2:
         sens = TP/(TP+FN)
         spec = TN/(TN+FP)
         bal_acc = (sens+spec)/2
-        return accuracy, bal_acc
+        return accuracy, bal_acc, n_correct_val, n_val_graphs
 
 
     
@@ -399,7 +401,7 @@ class LSTrainer_v2:
         partial_start_t = datetime.now()
         for i in range(n_dim_iter*n_repetitions):
                 if self.training_settings["resume_training"] and i == 0:
-                    accuracy, bal_acc = ls.run_inference(graph_set)
+                    accuracy, bal_acc, _, _ = ls.run_inference(graph_set)
                     if metric is None or metric=="accuracy":
                         old_acc = accuracy
                     elif metric=="balanced":
@@ -408,6 +410,9 @@ class LSTrainer_v2:
                     old_acc = ls.return_topscore()
                 ls.step_split_data(graph_set)
                 new_acc = ls.return_topscore()
+                n_correct_train = ls.return_n_correct()
+                n_graphs_train = ls.return_n_graphs()
+                train_logical = (n_correct_train+n_trivial)/n_graphs_train
                 # we add new accuracy and i after each improvement
                 if new_acc > old_acc:
                     print("New best found at iteration:",i)
@@ -416,8 +421,11 @@ class LSTrainer_v2:
                     self.training_history["train_score"].append(new_acc)
                     self.training_history["iter_improvement"].append(i)
                     self.training_history["alt_train_score"].append(alt_metric)
+                    self.training_history["train_logical"].append(train_logical)
                     # validation
-                    val_accuracy, val_bal_acc = self.evaluate_test_set_v2(val_graphs)
+                    val_accuracy, val_bal_acc, n_correct_val, n_graphs_val = self.evaluate_test_set_v2(val_graphs)
+                    val_logical = (n_correct_val+n_val_identities)/n_graphs_val
+                    self.training_history["val_logical"].append(val_logical)
                     print("Validation accuracy:",val_accuracy)
                     if metric == None or metric == "accuracy":
                         self.training_history["val_score"].append(val_accuracy)
@@ -442,7 +450,10 @@ class LSTrainer_v2:
                     self.training_history["train_score"].append(new_acc)
                     self.training_history["iter_improvement"].append(i)
                     self.training_history["alt_train_score"].append(alt_metric)
-                    val_accuracy, val_bal_acc = self.evaluate_test_set_v2(val_graphs)
+                    self.training_history["train_logical"].append(train_logical)
+                    val_accuracy, val_bal_acc, n_correct_val, n_graphs_val = self.evaluate_test_set_v2(val_graphs)
+                    val_logical = (n_correct_val+n_val_identities)/n_graphs_val
+                    self.training_history["val_logical"].append(val_logical)
                     print("Validation accuracy:",val_accuracy)
                     if metric == None or metric == "accuracy":
                         self.training_history["val_score"].append(val_accuracy)

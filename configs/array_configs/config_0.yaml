@@ -7,16 +7,16 @@ graph_settings:
   repetitions: 5
   min_error_rate: 0.001
   max_error_rate: 0.005
-  one_error_rate: 0.005
+  one_error_rate: 0.001
   m_nearest_nodes: 20
   n_node_features: 5
   power: 2
   n_classes: 1
 training_settings:
-  comment: "SimpleNNV4 large, score decay 0.0001, search radius 0.05, number of selections 100"
+  comment: "SimpleNNV4, score decay 0.0001, search radius 0.05, number of selections 100"
   suffix: "0"
   seed: Null
-  dataset_size: 400000
+  dataset_size: 500000
   batch_size_train: 9000
   validation_set_size: 40000
   batch_size_val: 9000  

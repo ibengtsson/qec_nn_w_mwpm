@@ -11,19 +11,21 @@ class LocalSearch:
             num_selections, 
             device, 
             score_decay=None,
-            metric = None):
+            metric = None
+            ):
+        
         self.model = model
         self.device = device
-        self.initial_score = torch.tensor(float(0))
-        self.top_score = self.initial_score
-        self.target = None
+        self.current_score = 0
+        self.top_score = self.current_score
+        #self.target = None
         self.vector = torch.nn.utils.parameters_to_vector(model.parameters())
         self.elite = self.vector.clone()
-        self.n = self.vector.numel()
-        self.running_idxs = np.arange(self.n)
+        self.n_params = self.vector.numel()
+        self.running_idxs = np.arange(self.n_params)
         np.random.shuffle(self.running_idxs)
         self.idx = 0
-        self.value = []  # list of indices
+        self.value = [] 
         self.num_selections = num_selections
         self.magnitude = torch.empty(self.num_selections,
                                 dtype=self.vector.dtype,
@@ -34,12 +36,10 @@ class LocalSearch:
         self.alt_score = 0
         self.score_decay = score_decay
         self.metric = metric
+        self.n_correct = 0
+        self.n_graphs = 0
 
     def set_value(self):
-        """Use the numpy choices function (which has no equivalent in Pytorch)
-        to generate a sample from the array of indices. The sample size and
-        distribution are dynamically updated by the algorithm's state.
-        """
         self.check_idx()
         choices = self.running_idxs[self.idx:self.idx+self.num_selections]
         self.value = torch.from_numpy(choices)
@@ -47,21 +47,14 @@ class LocalSearch:
         self.idx+=self.num_selections
 
     def check_idx(self):
-        if (self.idx+self.num_selections)>self.n:
+        if (self.idx+self.num_selections)>self.n_params:
             self.idx=0
             np.random.shuffle(self.running_idxs)
 
     def set_noise(self):
-        # Cast to precision and CUDA, and edit shape
-        # search radius can be adjusted to fit scale of noise
         self.magnitude.uniform_(-self.search_radius, self.search_radius).squeeze()
 
     def set_noise_vector(self):
-        """ This function defines a noise tensor, and returns it. The noise
-        tensor needs to be the same shape as our originial vecotr. Hence, a
-        "basis" tensor is created with zeros, then the chosen indices are
-        modified.
-        """
         self.noise_vector.fill_(0.)
         self.noise_vector[self.value] = self.magnitude
 
@@ -70,18 +63,18 @@ class LocalSearch:
         nn.utils.vector_to_parameters(self.vector, model.parameters())
 
     def set_elite(self):
-        self.jumped = False
+        #self.jumped = False
         self.elite[self.value] = self.vector[self.value]
             #self.elite.clamp_(-0.9, 0.9)
             #self.elite.copy_(self.vector)
-        self.jumped = True
+        #self.jumped = True
             #self.frustration.reset_state()
         
-    def set_vector(self):
-        if not self.jumped:
-            #self.vector.copy_(self.elite)
-            elite_vals = self.elite[self.value]
-            self.vector[self.value] = elite_vals
+    def reset_vector(self):
+        #if not self.jumped:
+        #self.vector.copy_(self.elite)
+        elite_vals = self.elite[self.value]
+        self.vector[self.value] = elite_vals
 
     def run_inference(self, graphs):
         n_correct = 0
@@ -110,7 +103,7 @@ class LocalSearch:
         sens = TP/(TP+FN)
         spec = TN/(TN+FP)
         bal_acc = (sens+spec)/2
-        return accuracy, bal_acc
+        return accuracy, bal_acc, n_correct, n_graphs
 
     def step(self,x, edge_index, edge_attr, batch_labels, detector_labels, flips):
         #print(self.vector)
@@ -134,7 +127,7 @@ class LocalSearch:
             self.top_score = used_score
             self.alt_score = alt_score
         else:
-            self.set_vector()
+            self.reset_vector()
         self.idx += 1
         # decay to escape local maxima
         if self.score_decay is not None:
@@ -147,7 +140,9 @@ class LocalSearch:
         #self.set_noise_vector()
         self.vector[self.value] = self.vector[self.value] + self.magnitude
         self.update_weights(self.model)
-        accuracy, bal_acc = self.run_inference(graphs)
+        accuracy, bal_acc, n_correct, n_graphs = self.run_inference(graphs)
+        self.n_correct = n_correct
+        self.n_graphs = n_graphs
         if self.metric is None or self.metric == "accuracy":
             used_score = accuracy
             alt_score = bal_acc
@@ -160,11 +155,15 @@ class LocalSearch:
             self.set_elite()
             self.top_score = used_score
             self.alt_score = alt_score
+            #self.current_score = used_score
+        #elif used_score > self.current_score:
+        #    self.current_score = used_score
         else:
-            self.set_vector()
+            self.reset_vector()
         self.idx += 1
         # decay to escape local maxima
         if self.score_decay is not None:
+            #self.current_score -= self.score_decay
             self.top_score -= self.score_decay
 
 
@@ -173,3 +172,9 @@ class LocalSearch:
     
     def return_alternative_metric(self):
         return self.alt_score
+    
+    def return_n_correct(self):
+        return self.n_correct
+    
+    def return_n_graphs(self):
+        return self.n_graphs
