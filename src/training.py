@@ -213,6 +213,50 @@ class LSTrainer_v2:
 
         return syndromes, flips, n_identities
     
+    def create_multi_p_set_test(self, n=5):
+        
+        # simulation settings
+        code_size = self.graph_settings["code_size"]
+        reps = self.graph_settings["repetitions"]
+        min_error_rate = self.graph_settings["min_error_rate"]
+        max_error_rate = self.graph_settings["max_error_rate"]
+        testset_size = self.training_settings["validation_set_size"]
+        error_rates = np.linspace(min_error_rate, max_error_rate, n)
+
+        task_dict = {
+            "z": "surface_code:rotated_memory_z",
+            "x": "surface_code:rotated_memory_x",
+        }
+        code_task = task_dict[self.graph_settings["experiment"]]
+
+        syndromes = []
+        flips = []
+        n_identities = 0
+        for p in error_rates:
+            sim = SurfaceCodeSim(
+                reps,
+                code_size,
+                p,
+                int(testset_size / n),
+                code_task=code_task,
+            )
+            syndrome, flip, n_id = sim.generate_syndromes(use_for_mwpm=True)
+            syndromes.append(syndrome)
+            flips.append(flip)
+            n_identities += n_id
+
+        syndromes = np.concatenate(syndromes)
+        flips = np.concatenate(flips)
+
+        # split into chunks to reduce memory footprint later
+        batch_size = self.training_settings["batch_size_val"]
+        n_splits = syndromes.shape[0] // batch_size + 1
+
+        syndromes = np.array_split(syndromes, n_splits)
+        flips = np.array_split(flips, n_splits)
+
+        return syndromes, flips, n_identities
+    
     # create a split set used for training with multiple different error prob
     def create_multi_p_set(self, n=5):
         
@@ -275,7 +319,6 @@ class LSTrainer_v2:
 
         syndromes = []
         flips = []
-        n_identities = 0
         sim = SurfaceCodeSim(
                 reps,
                 code_size,
@@ -292,7 +335,8 @@ class LSTrainer_v2:
         syndromes = np.array_split(syndromes, n_splits)
         flips = np.array_split(flips, n_splits)
 
-        return syndromes, flips, n_identities
+        return syndromes, flips, n_id
+        
     
     def create_graph_set(self, syndromes, flips, n_identities):
         m_nearest_nodes = self.graph_settings["m_nearest_nodes"]
@@ -371,6 +415,7 @@ class LSTrainer_v2:
         n_selections = self.training_settings["n_selections"]
         score_decay = self.training_settings["score_decay"]
         metric = self.training_settings["metric"]
+        n_train_graphs = self.training_settings["dataset_size"]
         n_model_params = len(torch.nn.utils.parameters_to_vector(self.model.parameters()))
         n_dim_iter = n_model_params // n_selections
 
@@ -379,12 +424,12 @@ class LSTrainer_v2:
 
         # generate validation syndromes
         n_val_graphs = self.training_settings["validation_set_size"]
-        val_syndromes, val_flips, n_val_identities = self.create_test_set(
-            n_graphs=n_val_graphs,
-        )
+        val_syndromes, val_flips, n_val_identities = self.create_multi_p_set_test()
+        #val_syndromes, val_flips, n_val_identities = self.create_test_set(
+        #    n_graphs=n_val_graphs,
+        #)
         # generate validation set graphs
         val_graphs = self.create_graph_set(val_syndromes, val_flips, n_val_identities)
-
         # set how many times all dimensions should be sampled
         repeat_selection = self.training_settings["repeat_selection"]
         if repeat_selection:
@@ -393,8 +438,8 @@ class LSTrainer_v2:
             n_repetitions = 1
 
         # create full dataset, split into smaller "batches"
-        #syndromes, flips, n_trivial = self.create_multi_p_set()
-        syndromes, flips, n_trivial = self.create_split_train_set()
+        syndromes, flips, n_trivial = self.create_multi_p_set()
+        #syndromes, flips, n_trivial = self.create_split_train_set()
         # create set of graphs from split syndrome set
         graph_set = self.create_graph_set(syndromes, flips, n_trivial)
         print("Number of dimension partitions:",n_dim_iter)
@@ -411,8 +456,7 @@ class LSTrainer_v2:
                 ls.step_split_data(graph_set)
                 new_acc = ls.return_topscore()
                 n_correct_train = ls.return_n_correct()
-                n_graphs_train = ls.return_n_graphs()
-                train_logical = (n_correct_train+n_trivial)/n_graphs_train
+                train_logical = (n_correct_train+n_trivial)/n_train_graphs
                 # we add new accuracy and i after each improvement
                 if new_acc > old_acc:
                     print("New best found at iteration:",i)
@@ -424,7 +468,7 @@ class LSTrainer_v2:
                     self.training_history["train_logical"].append(train_logical)
                     # validation
                     val_accuracy, val_bal_acc, n_correct_val, n_graphs_val = self.evaluate_test_set_v2(val_graphs)
-                    val_logical = (n_correct_val+n_val_identities)/n_graphs_val
+                    val_logical = (n_correct_val+n_val_identities)/n_val_graphs
                     self.training_history["val_logical"].append(val_logical)
                     print("Validation accuracy:",val_accuracy)
                     if metric == None or metric == "accuracy":
