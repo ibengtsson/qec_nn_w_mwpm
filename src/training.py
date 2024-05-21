@@ -424,10 +424,10 @@ class LSTrainer_v2:
 
         # generate validation syndromes
         n_val_graphs = self.training_settings["validation_set_size"]
-        val_syndromes, val_flips, n_val_identities = self.create_multi_p_set_test()
-        #val_syndromes, val_flips, n_val_identities = self.create_test_set(
-        #    n_graphs=n_val_graphs,
-        #)
+        #val_syndromes, val_flips, n_val_identities = self.create_multi_p_set_test()
+        val_syndromes, val_flips, n_val_identities = self.create_test_set(
+            n_graphs=n_val_graphs,
+        )
         # generate validation set graphs
         val_graphs = self.create_graph_set(val_syndromes, val_flips, n_val_identities)
         # set how many times all dimensions should be sampled
@@ -438,8 +438,8 @@ class LSTrainer_v2:
             n_repetitions = 1
 
         # create full dataset, split into smaller "batches"
-        syndromes, flips, n_trivial = self.create_multi_p_set()
-        #syndromes, flips, n_trivial = self.create_split_train_set()
+        #syndromes, flips, n_trivial = self.create_multi_p_set()
+        syndromes, flips, n_trivial = self.create_split_train_set()
         # create set of graphs from split syndrome set
         graph_set = self.create_graph_set(syndromes, flips, n_trivial)
         print("Number of dimension partitions:",n_dim_iter)
