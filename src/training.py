@@ -513,6 +513,8 @@ class LSTrainer_v2:
                             self.training_history["best_val_score"] = val_bal_acc
                             self.optimal_weights = self.model.state_dict()
                             self.optimal_vec = torch.nn.utils.parameters_to_vector(self.model.parameters())
+                    partial_t = datetime.now() - partial_start_t
+                    self.training_history["partial_time"].append(partial_t)
                     if self.save_model:
                         self.save_model_w_training_settings()         
         tot_t = datetime.now() - tot_start_t
