@@ -5,7 +5,7 @@ import sys
 sys.path.append("../")
 from src.models import GraphNN, SimpleGraphNNV4, SimpleGraphNNV6, GraphAttention, GraphAttentionV2, GraphAttentionV3
 from src.evaluation import ModelEval
-from src.utils import plot_syndrome
+#from src.utils import plot_syndrome
 import os
 import logging
 logging.disable(sys.maxsize)
@@ -13,6 +13,12 @@ os.environ["QECSIM_CFG"] = "/cephyr/users/fridafj/Alvis"
 #import matplotlib.pyplot as plt
 from datetime import datetime
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import scienceplots
+plt.style.use("science")
+
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 def main():
     # command line parsing
@@ -23,9 +29,9 @@ def main():
     
     # create a model
     #model = GraphNN()
-    #model = SimpleGraphNNV4()
+    model = SimpleGraphNNV4()
     #model = SimpleGraphNNV6()
-    model = GraphAttentionV3()
+    #model = GraphAttentionV3()
     #model = GATNN()
     config = Path(args.configuration)
     
@@ -34,9 +40,64 @@ def main():
     # train model
     evaluator = ModelEval(model, config=config)
     #trainer.train_warmup()
+    # tot_id = 0
+    # for i in range(15):
     syndromes, flips, n_id = evaluator.create_split_test_set()
+    #     tot_id += n_id
+    #     print(n_id)
+    
+    # avg_id = tot_id/15
+    # print(avg_id)
+
     n_removed = 0
-    wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id, n_removed)
+    wrong_syndromes, wrong_flips, preds, flip_arr  = evaluator.evaluate_test_set(syndromes, flips, n_id, n_removed)
+    n_correct = (preds == flip_arr).sum()
+    n_graphs = len(flip_arr)
+    acc = n_correct/n_graphs
+    TP = np.sum(np.logical_and(preds == 1, flip_arr == 1))
+    TN = np.sum(np.logical_and(preds == 0, flip_arr == 0))
+    FP = np.sum(np.logical_and(preds == 1, flip_arr == 0))
+    FN = np.sum(np.logical_and(preds == 0, flip_arr == 1))
+    sens = TP/(TP+FN)
+    spec = TN/(TN+FP)
+    #bal_acc = (sens+spec)/2
+    #print(bal_acc)
+    #cm = confusion_matrix(flip_arr, preds, normalize='true')
+    #print(cm)
+    #disp = ConfusionMatrixDisplay(confusion_matrix=cm,
+    #                          display_labels=["I", "X"])
+    #print(disp.text_kw)
+    #save_folder = Path("..\..\Figures\Plots")
+    # colors = sns.color_palette("crest", as_cmap=True)
+    # text_width = 5.9066
+    # column_width = 0.45 * text_width
+    # aspect_ratio = 1
+    # #aspect_ratio = 16/9
+    # figsize_tw = (text_width, 1/aspect_ratio * text_width)
+    # figsize_cw = (column_width, 1/aspect_ratio * column_width)
+    # fig, ax = plt.subplots(figsize=figsize_cw)
+    # disp = sns.heatmap(cm*100, annot=True, fmt = '.1f', 
+    #                    square=1, ax=ax, cbar=False, cmap="crest",xticklabels=["I","X"],yticklabels=["I","X"])
+    # for t in disp.texts: t.set_text(t.get_text() + "\%")
+    # disp.set_xlabel('Predicted label')
+    # disp.set_ylabel('True label')
+    # plt.tick_params(
+    # axis='both',          # changes apply to the x-axis
+    # which='both',      # both major and minor ticks are affected
+    # bottom=False,      # ticks along the bottom edge are off
+    # top=False,
+    # right=False,
+    # left=False,         # ticks along the top edge are off
+    # labelbottom=True,
+    # labelleft=True)
+    #disp.plot(cmap=colors,colorbar=False, ax=ax, values_format= '.0%')
+    #fig.tight_layout()
+    #plt.savefig("conf_bal.pdf", format="pdf")
+    #plt.show()
+    #num_wrong_flip = np.count_nonzero(wrong_flips == 1)
+    #num_wrong_no_flip = np.count_nonzero(wrong_flips == 0)
+    #print(num_wrong_flip)
+    #print(num_wrong_no_flip)
     #syndromes, flips, n_removed = remove_virtual_nodes(syndromes, flips)
     #wrong_syndromes, wrong_flips = evaluator.evaluate_test_set(syndromes, flips, n_id, n_removed)
     #wrong_ratio, all_ratio, wrong_virtual_ratio = calculate_ratios(syndromes, wrong_syndromes, "z")

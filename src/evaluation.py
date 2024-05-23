@@ -18,7 +18,7 @@ from datetime import datetime
 import random
 from typing import Callable
 
-from src.utils import parse_yaml, inference, get_misclassified_syndromes
+from src.utils import parse_yaml, ls_inference, get_misclassified_syndromes
 from src.simulations import SurfaceCodeSim
 from src.graph import get_batch_of_graphs
 from src.local_search import LocalSearch
@@ -96,6 +96,7 @@ class ModelEval:
 
         return syndromes, flips, n_id
     
+    
 
     def evaluate_test_set(self, syndromes, flips, n_identities, n_removed):
         n_graphs = self.training_settings["dataset_size"]
@@ -105,9 +106,20 @@ class ModelEval:
         n_correct_preds = 0
         wrong_syndromes = None
         wrong_flips = []
+        preds = None
+        flip_arr = None
         for syndrome, flip in zip(syndromes, flips):
             # this should maybe be changed to ls_inference and graphs generated before
-            _n_correct_preds, _ = inference(
+            # _n_correct_preds, _ = inference(
+            #     self.model,
+            #     syndrome,
+            #     flip,
+            #     experiment=self.graph_settings["experiment"],
+            #     m_nearest_nodes=m_nearest_nodes,
+            #     device=self.device,
+            # )
+            # n_correct_preds += _n_correct_preds
+            _wrong_syndromes, _wrong_flips, _preds, _n_correct = get_misclassified_syndromes(
                 self.model,
                 syndrome,
                 flip,
@@ -115,28 +127,26 @@ class ModelEval:
                 m_nearest_nodes=m_nearest_nodes,
                 device=self.device,
             )
-            n_correct_preds += _n_correct_preds
-            _wrong_syndromes, _wrong_flips = get_misclassified_syndromes(
-                self.model,
-                syndrome,
-                flip,
-                experiment=self.graph_settings["experiment"],
-                m_nearest_nodes=m_nearest_nodes,
-                device=self.device,
-            )
+            n_correct_preds += _n_correct
             if wrong_syndromes is not None:
                 if _wrong_syndromes.shape[0] > 0:
                     wrong_syndromes = np.concatenate((wrong_syndromes, _wrong_syndromes), axis=0)
                     wrong_flips = np.concatenate((wrong_flips, _wrong_flips), axis=0)
+                    preds = np.concatenate((preds, _preds), axis=None)
+                    flip_arr = np.concatenate((flip_arr, flip), axis=None)
+
             else:
                 if _wrong_syndromes.shape[0] > 0:
                     wrong_syndromes = _wrong_syndromes
                     wrong_flips = _wrong_flips
+                    preds = _preds
+                    flip_arr = flip
             # if _wrong_syndromes.shape[0] > 0:
             #     wrong_syndromes.append(_wrong_syndromes)
             #     wrong_flips.append(_wrong_flips)
 
         # compute logical failure rate
-        failure_rate = (n_graphs - n_correct_preds - n_identities) / (n_graphs-n_identities)
+        failure_rate = (n_graphs - n_correct_preds - n_identities) / (n_graphs)
         print(f"We have a logical failure rate of {failure_rate}.")
-        return wrong_syndromes, wrong_flips
+        print(self.training_settings["comment"])
+        return wrong_syndromes, wrong_flips, preds, flip_arr

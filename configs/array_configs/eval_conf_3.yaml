@@ -1,0 +1,22 @@
+paths:
+  saved_model_path: ../training_outputs/model_240519-103219_0.pt
+graph_settings:
+  experiment: "z"
+  code_size: 5
+  repetitions: 5
+  min_error_rate: 0.001
+  max_error_rate: 0.005
+  one_error_rate: 0.001
+  m_nearest_nodes: 20
+  n_node_features: 5
+  power: 2
+  n_classes: 1
+training_settings:
+  suffix: "a"
+  comment: "SimpleNNV4, balanced, mixed p"
+  seed: Null
+  dataset_size: 10000000
+  batch_size_train: 900
+  device: cuda:1
+  resume_training: True
+  metric: "accuracy"
