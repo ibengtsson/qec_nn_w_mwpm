@@ -74,6 +74,7 @@ class ModelTrainer:
 
         self.model = GraphAttentionV3(
             hidden_channels_GCN=model_settings["hidden_channels_GCN"],
+            num_heads=3,
         ).to(self.device)
         
         self.optimizer = torch.optim.Adam(

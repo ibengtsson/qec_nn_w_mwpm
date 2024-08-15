@@ -1,0 +1,12 @@
+Path,Type of head,GCN-layers,MLP-layers,Error rates,# parameters,Failure rate
+d5_d_t_5_240505-225619.pt,Feed-forward,256 512,256 128 128 64,Constant,717445,0.0002582
+d5_d_t_5_240505-231558.pt,Feed-forward,256 512,256 128 128 64,Mixed,717445,0.0003172
+d5_d_t_5_240503-143135.pt,Feed-forward,256 512,256,Mixed,659973,0.0007083
+d5_d_t_5_240504-234228.pt,Feed-forward,256 512,256,Constant,659973,0.0021793
+d5_d_t_5_240522-225233_load_f_d5_d_t_5_240514-164112.pt,Attention,128 256,Follows from GCN-dim - 3 head(s),Constant,4205445,0.0002042
+d5_d_t_5_240505-232511.pt,Attention,128 256,Follows from GCN-dim - 3 head(s),Mixed,4205445,0.0002986
+d5_d_t_5_240512-183638_load_f_d5_d_t_5_240503-125949.pt,Attention,128 256,Follows from GCN-dim - 1 head(s),Constant,4205445,0.0004109
+d5_d_t_5_240519-123614_load_f_d5_d_t_5_240512-183750_load_f_d5_d_t_5_240504-163103.pt,Attention,256 512,Follows from GCN-dim - 1 head(s),Constant,16799493,0.0002179
+d5_d_t_5_240503-112649.pt,Attention,128 256,Follows from GCN-dim - 1 head(s),Mixed,4205445,0.0005231
+d5_d_t_5_240503-112722.pt,Attention,256 512,Follows from GCN-dim - 1 head(s),Mixed,16799493,0.0005035
+d5_d_t_5_240527-110354_load_f_d5_d_t_5_240522-225233_load_f_d5_d_t_5_240514-164112.pt,Attention,128 256,Follows from GCN-dim - 3 head(s),Mixed,4205445,0.000183

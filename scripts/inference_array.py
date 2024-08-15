@@ -39,10 +39,10 @@ def main():
         [str(dim) + " " for dim in gcn_layers[:-1]] + [str(gcn_layers[-1])]
     )
     mixed = (
-        "Mixed"
+        "Constant"
         if data["graph_settings"]["min_error_rate"]
         == data["graph_settings"]["max_error_rate"]
-        else "Constant"
+        else "Mixed"
     )
 
     if "attention.qkv_proj.weight" in state_dict.keys():
@@ -50,17 +50,17 @@ def main():
         model = GraphAttentionV3(
             hidden_channels_GCN=gcn_layers,
             num_heads=n_heads,
-        )
+        ).to(device)
         inference_function = attention_inference
         name = "Attention"
-        mlp_dims = f"Follows from GCN-dim, {n_heads} head(s)"
+        mlp_dims = f"Follows from GCN-dim - {n_heads} head(s)"
 
     else:
         mlp_layers = data["model_settings"]["hidden_channels_MLP"]
         model = SimpleGraphNNV4(
             hidden_channels_GCN=gcn_layers,
             hidden_channels_MLP=mlp_layers,
-        )
+        ).to(device)
         inference_function = inference
         name = "Feed-forward"
         mlp_dims = "".join(
@@ -77,7 +77,7 @@ def main():
 
     # settings
     n_graphs = int(1e7)
-    n_graphs_per_sim = int(1e5)
+    n_graphs_per_sim = int(5e4)
     p = 1e-3
 
     m_nearest_nodes = data["graph_settings"]["m_nearest_nodes"]
@@ -150,7 +150,7 @@ def main():
     print(f"We have a logical failure rate of {failure_rate}.")
 
     # append results to file
-    file_path = Path("../data/failure_rates.csv")
+    file_path = Path("../data/failure_rates_updated.csv")
     data = [model_path.name, name, gcn_dims, mlp_dims, mixed, tot_params, failure_rate]
 
     if file_path.is_file():

@@ -97,8 +97,6 @@ def inference(
     edge_index, edge_weights, edge_classes = model(
         x, edge_index, edge_attr, detector_labels, batch_labels,
     )
-
->>>>>>> 0300dcb (fix plot errors on Alvis)
     
     edge_weights = torch.nn.functional.sigmoid(edge_weights)
     if nested_tensors:
@@ -114,9 +112,6 @@ def inference(
     #sample_flips = wrong_flips[inds]
     #for s, f in zip(samples, sample_flips):
     #    plot_syndrome(s, f)
->>>>>>> 0300dcb (fix plot errors on Alvis)
-    
-    
     n_correct = (preds == flips).sum()
     
     return n_correct
